@@ -487,7 +487,15 @@ c_common_has_builtin (cpp_reader *pfile)
 	break;
     }
 
+#if 0 // sdcpp
   return names_builtin_p (name);
+#else // sdcpp
+  /* sdcpp: the symbol table is in sdcc, and what is built in there depends
+     on the port, which is not known here.  Only these two are built in for
+     every port.  */
+  return (!strcmp (name, "__builtin_offsetof")
+	  || !strcmp (name, "__builtin_unreachable"));
+#endif // sdcpp
 }
 
 
