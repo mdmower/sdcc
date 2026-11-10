@@ -6720,7 +6720,9 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
 
           typecompat = compareType (currFunc->type->next, RTYPE (tree), false);
 
-          propagateConstExpr (&tree->right, resultType, reduceTypeAllowed);
+          /* a struct or union is returned from its object: do not replace that by a value */
+          if (!IS_STRUCT (RTYPE (tree)))
+            propagateConstExpr (&tree->right, resultType, reduceTypeAllowed);
 
           /* Report each atomic or nested qualifier mismatch once. */
           if (!diagnoseDissimilarPtrTargetTypes (currFunc->type->next,
