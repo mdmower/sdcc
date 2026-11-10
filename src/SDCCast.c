@@ -2232,8 +2232,9 @@ constExprValue (ast * cexpr, int check)
           return valCastLiteral (cexpr->ftype, floatFromVal (cexpr->right->opval.val), (TYPE_TARGET_ULONGLONG) ullFromVal (cexpr->right->opval.val));
         }
 
-      /* if this is a C23 constexpr, use its value */
-      if (IS_CONSTEXPR (cexpr->ftype))
+      /* if this is a C23 constexpr, use its value. Only a symbol is one: an
+         expression computed from one can inherit the marker through its type */
+      if (IS_AST_SYM_VALUE (cexpr) && IS_CONSTEXPR (cexpr->ftype))
         {
           value *ivalAsVal = list2val (AST_SYMBOL (cexpr)->ival, check);
           value *val = valRecastLitVal (cexpr->etype, ivalAsVal);
@@ -3875,7 +3876,9 @@ rewriteStructAssignment (ast *tree)
 void
 propagateConstExpr (ast **ptree, RESULT_TYPE resultType, bool reduceTypeAllowed)
 {
-  if (ptree && *ptree && SPEC_CONSTEXPR ((*ptree)->etype))
+  /* Only a symbol names an object declared 'constexpr'. An expression
+     computed from one can inherit the marker through its type. */
+  if (ptree && IS_AST_SYM_VALUE (*ptree) && SPEC_CONSTEXPR ((*ptree)->etype))
     {
       ast *newAst = newAst_VALUE (constExprValue (*ptree, true));
       copyAstLoc (newAst, *ptree);
@@ -6760,6 +6763,13 @@ typeofOp (ast *tree)
   SPEC_SCLS (spec_type) = 0;
   SPEC_STAT (spec_type) = 0;
   SPEC_EXTR (spec_type) = 0;
+  /* A value computed from a constexpr object can inherit the object's marker
+     through its type. That does not make what is declared here constexpr. */
+  if (IS_SPEC (type) && !IS_AST_SYM_VALUE (tree))
+    {
+      SPEC_CONSTEXPR (spec_type) = 0;
+      SPEC_IMPLICIT_CONSTEXPR (spec_type) = 0;
+    }
   return type;
 }
 
