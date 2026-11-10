@@ -3393,9 +3393,14 @@ checkPtrCast (sym_link *newType, sym_link *orgType, bool implicit, bool orgIsNul
                         {
                           errors += werror (W_LITERAL_GENERIC);
                         }
-                      else
+                      else if (getSize (orgType) < GPTRSIZE)
                         {
                           errors += werror (W_NONPTR2_GENPTR);
+                        }
+                      else if (implicit)
+                        {
+                          // an integer as wide as a generic pointer (uintptr_t) carries the storage itself
+                          errors += werror (W_INTEGRAL2PTR_NOCAST);
                         }
                     }
                   else if (implicit)
