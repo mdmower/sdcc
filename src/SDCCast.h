@@ -207,6 +207,7 @@ ast *offsetofOp (sym_link * type, ast * snd);
 value *evalStmnt (ast *);
 ast *replaceAstWithTemporary (ast ** treeptr);
 ast *createRMW (ast *, unsigned, ast *);
+ast *createStructCopy (symbol *dest, ast *src);
 symbol * createFunctionDecl (symbol *);
 ast *createFunction (symbol *, ast *);
 ast *createBlock (symbol *, ast *);

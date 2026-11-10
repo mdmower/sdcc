@@ -4026,6 +4026,31 @@ rewriteStructAssignment (ast *tree)
   return decorateType (newTree, RESULT_TYPE_OTHER, true);
 }
 
+/*-----------------------------------------------------------*/
+/* createStructCopy - create the decorated tree that copies  */
+/* the value of the struct / union expression "src" (already */
+/* decorated) to the compiler-generated object "dest"        */
+/*-----------------------------------------------------------*/
+ast *
+createStructCopy (symbol *dest, ast *src)
+{
+  ast *destTree = newAst_VALUE (symbolVal (dest));
+  copyAstLoc (destTree, src);
+  ast *tree = newNode ('=', destTree, src);
+  copyAstLoc (tree, src);
+
+  /* as the right side of an assignment, src is not marked as an rvalue */
+  src->rvalue = 0;
+
+  /* decorating a call copies an argument that gets cast, and the
+     copy finds its symbols by their names in the symbol table */
+  addSym (SymbolTab, dest, dest->name, dest->level, dest->block, false);
+  tree = rewriteStructAssignment (tree);
+  deleteSym (SymbolTab, dest, dest->name);
+
+  return tree;
+}
+
 /*--------------------------------------------------------------*/
 /* propagateConstExpr - propagates the value of an AST declared */
 /* 'constexpr' to the current AST node, which it replaces.      */
