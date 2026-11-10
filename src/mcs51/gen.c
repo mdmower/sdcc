@@ -1926,7 +1926,11 @@ aopPut (asmop *aop, const char *s, int offset)
               EQ (s, "r0") || EQ (s, "r1") || EQ (s, "r2") || EQ (s, "r3") ||
               EQ (s, "r4") || EQ (s, "r5") || EQ (s, "r6") || EQ (s, "r7"))
             {
-              emitcode ("mov", "%s,%s", aop->aopu.aop_reg[offset]->dname, s);
+              /* The accumulator takes @Ri and Rn directly; 'mov acc,...' would be a byte longer. */
+              if (EQ (aop->aopu.aop_reg[offset]->name, "a"))
+                emitcode ("mov", "a,%s", s);
+              else
+                emitcode ("mov", "%s,%s", aop->aopu.aop_reg[offset]->dname, s);
             }
           else
             {
