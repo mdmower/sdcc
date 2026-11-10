@@ -1673,7 +1673,10 @@ createIvalCharPtr (ast * sym, sym_link * type, ast * iexpr, ast * rootVal)
       return decorateType (resolveSymbols (rast), RESULT_TYPE_NONE, true);
     }
 
-  if ((IS_LITERAL (iexpr->etype) || (IS_SPEC (iexpr->etype) && SPEC_SCLS (iexpr->etype) == S_CODE)) && IS_ARRAY (iexpr->ftype))
+  /* Only a string literal initializes the array as a whole. Any other array */
+  /* in code memory has the same storage class, but no characters to copy.   */
+  if (IS_AST_SYM_VALUE (iexpr) && AST_SYMBOL (iexpr)->isstrlit &&
+      (IS_LITERAL (iexpr->etype) || (IS_SPEC (iexpr->etype) && SPEC_SCLS (iexpr->etype) == S_CODE)) && IS_ARRAY (iexpr->ftype))
     {
       /* for each character generate an assignment */
       /* to the array element */
