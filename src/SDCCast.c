@@ -2333,6 +2333,34 @@ constExprTree (ast *cexpr)
   return false;
 }
 
+/*-------------------------------------------------------------*/
+/* constExprIlist - returns true if the first expression in    */
+/*                  the initializer list is a constant         */
+/*                  expression                                 */
+/*-------------------------------------------------------------*/
+bool
+constExprIlist (initList *ilist)
+{
+  if (!ilist)
+    {
+      return true;
+    }
+
+  assert (ilist->type != INIT_HOLE);
+
+  if (ilist->type == INIT_DEEP)
+    {
+      return constExprIlist (ilist->init.deep);
+    }
+
+  /* The list is evaluated again later, and decorating an expression can
+     replace its root (a conditional operator with a constant condition,
+     _Generic): keep the result. */
+  ilist->init.node = decorateType (resolveSymbols (ilist->init.node), RESULT_TYPE_NONE, true);
+
+  return constExprTree (ilist->init.node);
+}
+
 /*-----------------------------------------------------------------*/
 /* constExprValue - returns the value of a constant expression     */
 /*                  or NULL if it is not a constant expression     */
