@@ -168,6 +168,7 @@ designation *revDesignation (designation *);
 designation *copyDesignation (designation *);
 initList *reorderIlist (sym_link *, initList *);
 initList *reorderIlistIval (sym_link *, initList *);
+initList *reorderIlistCode (sym_link *, initList *, initList **);
 value *valFromType (sym_link *);
 value *constFloatVal (const char *);
 value *constFixed16x16Val (const char *);

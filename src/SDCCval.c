@@ -582,10 +582,14 @@ nextInitSlot (sym_link * type, int slot)
 /*   union through one alternative and walks past the members       */
 /*   promoted out of the others, the way printIvalStruct() does, so */
 /*   that they consume no initializer of their own.                 */
+/*   PARTS, unless NULL, takes the initializers for a part of an    */
+/*   object that an expression initializes as a whole, as in        */
+/*   {.t = x, .t.l = 1}. They keep their designation and are not in */
+/*   the list returned.                                             */
 /*------------------------------------------------------------------*/
-static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipaliases)
+static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipaliases, initList ** parts)
 {
-  initList *iloop, *nlist, **nlistArray;
+  initList *iloop, *nlist, **nlistArray, **partArray = NULL;
   symbol *sflds;
   int size=0, idx;
 
@@ -636,6 +640,8 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
         }
     }
   nlistArray = Safe_calloc ( size, sizeof(initList *) );
+  if (parts)
+    partArray = Safe_calloc ( size, sizeof(initList *) );
 
   /* pull together all the initializers into an ordered list */
   iloop = ilist ? ilist->init.deep : NULL;
@@ -670,6 +676,24 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
             {
               if (idx >= size)
                 continue;
+              if (partArray && nlistArray[idx] && nlistArray[idx]->type == INIT_NODE)
+                {
+                  /* The expression stays the initializer of the object;
+                     this one changes a part of it (C11 6.7.9p19). */
+                  initList **eol, *part;
+
+                  if (iloop->type == INIT_NODE)
+                    part = newiList(INIT_NODE, iloop->init.node);
+                  else
+                    part = newiList(INIT_DEEP, iloop->init.deep);
+                  part->filename = iloop->filename;
+                  part->lineno = iloop->lineno;
+                  part->designation = iloop->designation;
+                  for (eol = &partArray[idx]; *eol; )
+                    eol = &((*eol)->next);
+                  *eol = part;
+                  continue;
+                }
               if (nlistArray[idx] == NULL)
                 nlistArray[idx] = newiList(INIT_DEEP, NULL);
               moveNestedInit(nlistArray[idx], iloop);
@@ -685,7 +709,17 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
           if (nlistArray[idx] != NULL)
             werrorfl (iloop->filename, iloop->lineno, W_DUPLICATE_INIT, idx);
           nlistArray[idx] = iloop;
+          if (partArray)
+            partArray[idx] = NULL;
         }
+    }
+
+  /* hand over the parts, which are for different objects from slot to slot */
+  for (idx = 0; partArray && idx < size; idx++)
+    {
+      while (*parts)
+        parts = &((*parts)->next);
+      *parts = partArray[idx];
     }
 
   /* create new list from nlistArray/size */
@@ -739,7 +773,7 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
 /*------------------------------------------------------------------*/
 initList *reorderIlist (sym_link * type, initList * ilist)
 {
-  return reorderIlistFull (type, ilist, false);
+  return reorderIlistFull (type, ilist, false, NULL);
 }
 
 /*------------------------------------------------------------------*/
@@ -751,7 +785,18 @@ initList *reorderIlist (sym_link * type, initList * ilist)
 /*------------------------------------------------------------------*/
 initList *reorderIlistIval (sym_link * type, initList * ilist)
 {
-  return reorderIlistFull (type, ilist, true);
+  return reorderIlistFull (type, ilist, true, NULL);
+}
+
+/*------------------------------------------------------------------*/
+/* reorderIlistCode - the same, for createIval(), which initializes */
+/*   by code and so can also change a part of an object that an     */
+/*   expression initialized as a whole. Those initializers are      */
+/*   added to PARTS, to be applied after the list returned.         */
+/*------------------------------------------------------------------*/
+initList *reorderIlistCode (sym_link * type, initList * ilist, initList ** parts)
+{
+  return reorderIlistFull (type, ilist, true, parts);
 }
 
 /*------------------------------------------------------------------*/
