@@ -52,7 +52,7 @@ static void huffCreate(const uint8* pBits, HuffTable* pHuffTable)
 }
 
 void testBug(void) {
-#ifndef __SDCC_mcs51 // Bug #3875
+#if !(defined(__SDCC_mcs51) && defined(__SDCC_MODEL_SMALL) && !defined(__SDCC_STACK_AUTO)) // Lack of memory
     huffCreate(gBits, &gHuffTab0);
 
     ASSERT(gHuffTab0.mMinCode[0] == 0x0000);
