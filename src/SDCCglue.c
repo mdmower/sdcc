@@ -570,7 +570,11 @@ initPointer (initList *ilist, sym_link *toType, int showError)
       (IS_ARRAY (expr->left->ftype) || IS_PTR (expr->left->ftype)) &&
       compareType (toType, expr->left->ftype, false) && IS_AST_LIT_VALUE (expr->right))
     {
-      return valForCastAggr (expr->left, expr->left->ftype, expr->right, expr->opval.op);
+      val = valForCastAggr (expr->left, expr->left->ftype, expr->right, expr->opval.op);
+      /* an offset into a string literal: remember the literal, it has to be emitted too */
+      if (val && AST_SYMBOL (expr->left)->isstrlit)
+        val->sym = AST_SYMBOL (expr->left);
+      return val;
     }
 
   /* (char *)(expr1) */
@@ -1634,10 +1638,16 @@ printIvalCharPtr (symbol *sym, sym_link *type, value *val, struct dbuf_s *oBuf)
   int size = 0;
   char *p;
 
-  if (val && !!(p = (char *) malloc (strlen (val->name) + 1)))
+  if (val)
     {
-      strcpy (p, val->name);
-      addSet (&ccpStr, p);
+      /* a string literal goes by its own name; val->name can be an offset into it */
+      const char *name = (val->sym && val->sym->isstrlit) ? val->sym->name : val->name;
+
+      if (!!(p = (char *) malloc (strlen (name) + 1)))
+        {
+          strcpy (p, name);
+          addSet (&ccpStr, p);
+        }
     }
 
   /* PENDING: this is _very_ mcs51 specific, including a magic
