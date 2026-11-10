@@ -5608,6 +5608,7 @@ genRet (iCode *ic)
             }
         }
       freeAsmop (0, aop, ic, true);
+      freeAsmop (IC_LEFT (ic), NULL, ic, true);
       goto jumpret;
     }
 
