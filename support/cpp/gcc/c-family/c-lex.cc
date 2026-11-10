@@ -332,9 +332,15 @@ c_common_has_attribute (cpp_reader *pfile, bool std_syntax)
   token = get_token_no_padding (pfile);
   if (token->type == CPP_NAME)
     {
+      /* sdcpp: there are no identifier trees and no attribute tables here.
+	 sdcc has no __attribute__ and ignores every standard attribute it
+	 parses (warning 284), so the name is not looked up: the syntax is
+	 checked and the result is 0.  */
+#if 0 // sdcpp
       attr_name = get_identifier ((const char *)
 				  cpp_token_as_text (pfile, token));
-// sdcpp      attr_name = canonicalize_attr_name (attr_name);
+      attr_name = canonicalize_attr_name (attr_name);
+#endif // sdcpp
       bool have_scope = false;
       int idx = 0;
       const cpp_token *nxt_token;
@@ -348,12 +354,12 @@ c_common_has_attribute (cpp_reader *pfile, bool std_syntax)
 	  nxt_token = get_token_no_padding (pfile);
 	  if (nxt_token->type == CPP_NAME)
 	    {
+#if 0 // sdcpp
 	      tree attr_ns = attr_name;
 	      tree attr_id
 		= get_identifier ((const char *)
 				  cpp_token_as_text (pfile, nxt_token));
-// sdcpp	      attr_id = canonicalize_attr_name (attr_id);
-#if 0 // sdcpp
+	      attr_id = canonicalize_attr_name (attr_id);
 	      if (c_dialect_cxx ())
 		{
 		  /* OpenMP attributes need special handling.  */
@@ -363,11 +369,11 @@ c_common_has_attribute (cpp_reader *pfile, bool std_syntax)
 			  || is_attribute_p ("sequence", attr_id)))
 		    result = 1;
 		}
-#endif // sdcpp
 	      if (result)
 		attr_name = NULL_TREE;
 	      else
 		attr_name = build_tree_list (attr_ns, attr_id);
+#endif // sdcpp
 	    }
 	  else
 	    {
@@ -378,7 +384,6 @@ c_common_has_attribute (cpp_reader *pfile, bool std_syntax)
 	}
       else
 	{
-	   fprintf(stderr, "incomplete, something with attributes\n");
 #if 0 // sdcpp
 	  /* Some standard attributes need special handling.  */
 	  if (c_dialect_cxx ())
@@ -412,7 +417,6 @@ c_common_has_attribute (cpp_reader *pfile, bool std_syntax)
 	}
       if (attr_name && (have_scope || !std_syntax))
 	{
-	   fprintf(stderr, "incomplete, something with attrib\n");
 #if 0 // sdcpp
 	  init_attributes ();
 	  const struct attribute_spec *attr = lookup_attribute_spec (attr_name);
