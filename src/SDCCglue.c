@@ -1115,6 +1115,23 @@ designatedAlternative (symbol *sflds, initList *iloop, initList **ilist, symbol 
 }
 
 /*-----------------------------------------------------------------*/
+/* firstIsAnonStruct - a union is initialized through its first    */
+/*   member. When that is an anonymous struct, there are several   */
+/*   members to initialize after promoteAnonStructs(): the ones    */
+/*   not marked as aliases.                                        */
+/*-----------------------------------------------------------------*/
+static bool
+firstIsAnonStruct (symbol *sflds)
+{
+  int members = 0;
+
+  for ( ; sflds; sflds = sflds->next)
+    if (!sflds->anonunionalias && fieldHasIval (sflds))
+      members++;
+  return members > 1;
+}
+
+/*-----------------------------------------------------------------*/
 /* printIvalStruct - generates initial value for structures        */
 /*-----------------------------------------------------------------*/
 static void
@@ -1144,7 +1161,9 @@ printIvalStruct (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oB
   if (!sflds)
     return;
 
-  if (SPEC_STRUCT (type)->type == UNION)
+  /* a union that starts with an anonymous struct is walked like a struct:
+     its other members are skipped there as aliases */
+  if (SPEC_STRUCT (type)->type == UNION && !firstIsAnonStruct (sflds))
     {
       int size;
       /* skip past holes, print value */

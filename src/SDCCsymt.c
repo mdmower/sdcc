@@ -2107,6 +2107,12 @@ promoteAnonStructs (structdef * sdef)
           if (!subfield)
             continue;           /* just in case it's empty */
 
+          /* An initializer may still enclose the initializers of these
+             members in braces of their own, so record where they start and
+             end among the members that take one. */
+          symbol *firstival = NULL;
+          symbol *lastival = NULL;
+
           *tofield = subfield;
           for (;;)
             {
@@ -2125,10 +2131,21 @@ promoteAnonStructs (structdef * sdef)
 
               subfield->offset += base;
               subfield->anonunionalias |= field->anonunionalias;
+              if (!subfield->bitUnnamed)
+                {
+                  if (!firstival)
+                    firstival = subfield;
+                  lastival = subfield;
+                }
               if (subfield->next)
                 subfield = subfield->next;
               else
                 break;
+            }
+          if (firstival)
+            {
+              firstival->anonopen++;
+              lastival->anonclose++;
             }
           subfield->next = nextfield;
           tofield = &subfield->next;
