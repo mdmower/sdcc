@@ -7986,7 +7986,14 @@ expandInlineFuncs (ast * tree, ast * block)
           /* {{inline_function_code}}, retsym                         */
           tree->opval.op = ',';
           if (IFFUNC_ISCRITICAL (func->type))
-            inlinetree = newNode (CRITICAL, inlinetree, NULL);
+            {
+              /* The new node must be at the level of the block it wraps:
+                 fixupInline below takes the base level from it. */
+              ast *body = inlinetree;
+
+              inlinetree = newNode (CRITICAL, body, NULL);
+              copyAstLoc (inlinetree, body);
+            }
           tree->left = inlinetree;
           if (retsym)
               tree->right = newAst_VALUE (symbolVal (retsym));
