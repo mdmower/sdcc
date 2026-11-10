@@ -1454,7 +1454,9 @@ serialRegAssign (eBBlock ** ebbs, int count)
                         {
                           symbol *right = OP_SYMBOL (IC_RIGHT (ic));
 
-                          if (right->regs[j] && (right->regType != REG_BIT))
+                          /* A spilt operand can still carry the registers it once had. They mean
+                             nothing now, and taking r0 or r1 from them would bypass mcs51_ptrRegReq. */
+                          if (!right->isspilt && right->regs[j] && (right->regType != REG_BIT))
                             sym->regs[j] = allocThisReg (right->regs[j]);
                         }
                       if (!sym->regs[j])
@@ -1622,7 +1624,7 @@ fillGaps (void)
                 {
                   symbol *right = OP_SYMBOL (IC_RIGHT (ic));
 
-                  if (right->regs[i] && right->regs[i]->type != REG_BIT)
+                  if (!right->isspilt && right->regs[i] && right->regs[i]->type != REG_BIT)
                     sym->regs[i] = allocThisReg (right->regs[i]);
                 }
               if (!sym->regs[i])
