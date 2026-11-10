@@ -24,6 +24,7 @@
 -------------------------------------------------------------------------*/
 
 #include "common.h"
+#include "SDCCbtree.h"
 #include "ralloc.h"
 #include "gen.h"
 #include "dbuf_string.h"
@@ -3360,6 +3361,42 @@ positionRegsReverse (eBBlock ** ebbs, int count)
 }
 
 /*-----------------------------------------------------------------*/
+/* widenBlocks - move each variable to a block that encloses every */
+/* place where it is live. Stack allocation lets variables of      */
+/* sibling blocks share stack space, but optimizations, inlining   */
+/* in particular, can make a variable live outside the block it    */
+/* was declared in.                                                */
+/*-----------------------------------------------------------------*/
+static void
+widenBlocks (eBBlock **ebbs, int count)
+{
+  int i, key;
+  iCode *ic;
+
+  for (i = 0; i < count; i++)
+    for (ic = ebbs[i]->sch; ic; ic = ic->next)
+      {
+        if (!ic->rlive)
+          continue;
+
+        for (key = 0; key < ic->rlive->size; key++)
+          {
+            symbol *sym;
+
+            if (!bitVectBitValue (ic->rlive, key))
+              continue;
+            sym = hTabItemWithKey (liveRanges, key);
+            if (!sym)
+              continue;
+
+            sym->block = btree_lowest_common_ancestor (sym->block, ic->block);
+            if (SYM_SPIL_LOC (sym))
+              SYM_SPIL_LOC (sym)->block = btree_lowest_common_ancestor (SYM_SPIL_LOC (sym)->block, sym->block);
+          }
+      }
+}
+
+/*-----------------------------------------------------------------*/
 /* assignRegisters - assigns registers to each live range as need  */
 /*-----------------------------------------------------------------*/
 void
@@ -3432,6 +3469,7 @@ mcs51_assignRegisters (ebbIndex * ebbi)
   /* redo that offsets for stacked automatic variables */
   if (currFunc)
     {
+      widenBlocks (ebbs, count);
       redoStackOffsets ();
     }
 
