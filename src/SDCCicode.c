@@ -47,6 +47,7 @@ int inlinedActive = 0;
 
 symbol *returnLabel;            /* function return label */
 symbol *entryLabel;             /* function entry  label */
+static symbol *structReturnSym; /* function's temporary object for struct returns */
 
 /*-----------------------------------------------------------------*/
 /* forward definition of some functions */
@@ -4055,6 +4056,7 @@ geniCodeFunctionBody (ast * tree, int lvl)
   iTempLblNum = 0;
   operandKey = 0;
   iCodeKey = 0;
+  structReturnSym = NULL;
   func = ast2iCode (tree->left, lvl + 1);
 
   savefilename = filename;
@@ -4116,24 +4118,53 @@ geniCodeReturn (operand *op)
 }
 
 /*-----------------------------------------------------------------*/
-/* geniCodeReturnStruct - gen icode for 'return' of the struct or  */
-/*                        union value of a call                    */
+/* geniCodeReturnStruct - gen icode for 'return' of a struct or    */
+/*                        union value that is not a variable       */
 /*-----------------------------------------------------------------*/
 static void
 geniCodeReturnStruct (ast *tree, int lvl)
 {
   /* A struct or union is returned from an object: the code generators copy it from there to
      the caller's object. A variable arrives at the return as that object, but the value of
-     a call as its address, which the code generators cannot return. That value is in an
-     object of its own, see geniCodeCall(): return that. */
-  operand *op = ast2iCode (tree, lvl + 1);
-  iCode *ic = iCodeChainEnd;
+     any other expression (a call, *p, a[i], s.m, ...) as its address, which the code
+     generators cannot return. */
+  if (tree->opval.op == CALL)
+    {
+      /* The value of a call is in an object of its own, see geniCodeCall(): return that. */
+      operand *op = ast2iCode (tree, lvl + 1);
+      iCode *ic = iCodeChainEnd;
 
-  if (ic && ic->op == ADDRESS_OF && IC_RESULT (ic) == op && IS_TRUE_SYMOP (IC_LEFT (ic)))
-    op = operandFromSymbol (OP_SYMBOL (IC_LEFT (ic)), false);
-  else
-    wassert (0);
-  geniCodeReturn (op);
+      if (ic && ic->op == ADDRESS_OF && IC_RESULT (ic) == op && IS_TRUE_SYMOP (IC_LEFT (ic)))
+        op = operandFromSymbol (OP_SYMBOL (IC_LEFT (ic)), false);
+      else
+        wassert (0);
+      geniCodeReturn (op);
+      return;
+    }
+
+  /* Copy any other value to a temporary object, one for all such returns of the function. */
+  if (!structReturnSym)
+    {
+      symbol *sym = newSymbol (genSymName (scopeLevel), 1);
+      int stack;
+
+      sym->type = copyLinkChain (currFunc->type->next);
+      sym->etype = getSpec (sym->type);
+      SPEC_SCLS (sym->etype) = S_AUTO;
+      SPEC_OCLS (sym->etype) = NULL;
+      SPEC_EXTR (sym->etype) = 0;
+      SPEC_STAT (sym->etype) = 0;
+      SPEC_CONST (sym->etype) = 0;
+      SPEC_VOLATILE (sym->etype) = 0;
+      stack = allocVariables (sym);
+      currFunc->stack += options.useXstack ? 0 : stack;
+      currFunc->xstack += options.useXstack ? stack : 0;
+      structReturnSym = sym;
+    }
+  tree = createStructCopy (structReturnSym, tree);
+  if (!tree->isError)
+    ast2iCode (tree, lvl + 1);
+  geniCodeReturn (operandFromSymbol (structReturnSym, false));
 }
 
 /*-----------------------------------------------------------------*/
@@ -4674,8 +4705,10 @@ ast2iCode (ast * tree, int lvl)
       return NULL;
     }
 
-  /* the struct or union value of a call is returned from the object that holds it */
-  if (tree->opval.op == RETURN && IS_AST_OP (tree->right) && tree->right->opval.op == CALL && IS_STRUCT (tree->right->ftype))
+  /* A struct or union value that is not a variable needs an object to be returned from.
+     A conditional expression is left as it is: for these types its evaluation is wrong
+     already (bugs #4131, #4163), which the code generators should refuse rather than hide. */
+  if (tree->opval.op == RETURN && IS_AST_OP (tree->right) && tree->right->opval.op != '?' && IS_STRUCT (tree->right->ftype))
     {
       geniCodeReturnStruct (tree->right, lvl);
       return NULL;

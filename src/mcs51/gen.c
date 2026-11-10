@@ -5489,10 +5489,11 @@ genRet (iCode *ic)
   size = AOP_SIZE (IC_LEFT (ic));
   const bool bigreturn = IS_STRUCT (operandType (IC_LEFT (ic)));
 
-  /* Only a plain variable arrives here as a struct. Any other struct-valued expression (a call,
-     *p, a[i], s.m, a compound literal) arrives as its address, and the code below would return
-     that address in the registers and leave the caller's object untouched (bug #4157). Until
-     such returns are implemented, refuse them instead of generating wrong code silently. */
+  /* A struct arrives here as an object: a variable, or the object the front end provides for
+     the value of another expression (geniCodeReturnStruct). A conditional expression still
+     arrives as its address (bugs #4131, #4163), and the code below would return that address
+     in the registers and leave the caller's object untouched (bug #4157). Until such returns
+     are implemented, refuse them instead of generating wrong code silently. */
   if (!bigreturn && IS_STRUCT (currFunc->type->next))
     werrorfl (ic->filename, ic->lineno, E_NOT_ALLOWED,
               "returning this struct or union expression directly (assign it to a variable and return that) is");
