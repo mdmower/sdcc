@@ -2867,6 +2867,9 @@ computeType (sym_link * type1, sym_link * type2, RESULT_TYPE resultType, int op)
   /* If difference between pointers or arrays then the result is a ptrdiff */
   else if ((op == '-') && (IS_PTR (type1) || IS_ARRAY (type1)) && (IS_PTR (type2) || IS_ARRAY (type2)))
     rType = newPtrDiffLink();
+  /* of two object pointers, a generic pointer can represent the other one, but not the other way round */
+  else if (IS_PTR (type1) && !IS_GENPTR (type1) && !IS_FUNCPTR (type1) && IS_GENPTR (type2) && !IS_FUNCPTR (type2))
+    rType = copyLinkChain (type2);
   /* if one of them is a pointer or array then that prevails */
   else if (IS_PTR (type1) || IS_ARRAY (type1))
     rType = copyLinkChain (type1);
