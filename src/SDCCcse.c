@@ -493,9 +493,14 @@ DEFSETFUNC (findPointerSet)
   V_ARG (operand **, opp);
   V_ARG (operand *, rop);
 
+  /* A read through a pointer to a volatile object has to happen, whatever was stored before. */
+  if (IS_PTR (operandType (op)) && isVolatile (operandType (op)->next))
+    return 0;
+
   if (POINTER_SET (cdp->diCode) &&
       op->key &&
       IC_RESULT (cdp->diCode)->key == op->key &&
+      !(IS_PTR (operandType (IC_RESULT (cdp->diCode))) && isVolatile (operandType (IC_RESULT (cdp->diCode))->next)) &&
       !isOperandVolatile (IC_RESULT (cdp->diCode), true) &&
       !isOperandVolatile (IC_RIGHT (cdp->diCode), true) &&
       getSize (operandType (IC_RIGHT (cdp->diCode))) ==
