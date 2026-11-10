@@ -236,6 +236,7 @@ ast *createFor (symbol *, symbol *, symbol *, symbol *, ast *, ast *, ast *, ast
 void eval2icode (ast *);
 value *constExprValue (ast *, int);
 bool constExprTree (ast *);
+bool constExprIlist (initList *);
 int setAstFileLine (ast *tree, const char *filename, int lineno);
 symbol *funcOfType (const char *name, sym_link *rtype, sym_link *argtype, int nArgs, int rent);
 symbol *funcOfType2 (const char *name, sym_link *rtype, sym_link *largtype, sym_link *rargtype, int rent);
