@@ -344,6 +344,9 @@ typedef struct symbol
                                        its first alternative: aliases storage initialized
                                        through that alternative (set in promoteAnonStructs,
                                        read by createIvalStruct and printIvalStruct) */
+  unsigned anonopen:8;              /* number of anonymous structs/unions this is the first */
+  unsigned anonclose:8;             /* and the last member of that takes an initializer (set
+                                       in promoteAnonStructs, read by unbraceAnonIlist) */
 
   /* following flags are used by the backend
      for code generation and can be changed
