@@ -473,7 +473,7 @@ getFreePtr (iCode * ic, asmop * aop, bool result)
   if (!r0iu)
     {
       /* push it if not already pushed */
-      if ((ic->op == IPUSH) || (ic->op == PCALL))
+      if ((ic->op == IPUSH) || (ic->op == IPUSH_VALUE_AT_ADDRESS) || (ic->op == PCALL))
         {
           MOVB (REG_WITH_INDEX (R0_IDX)->dname);
           R0INB++;
@@ -495,7 +495,7 @@ getFreePtr (iCode * ic, asmop * aop, bool result)
   if (!r1iu)
     {
       /* push it if not already pushed */
-      if ((ic->op == IPUSH) || (ic->op == PCALL))
+      if ((ic->op == IPUSH) || (ic->op == IPUSH_VALUE_AT_ADDRESS) || (ic->op == PCALL))
         {
           MOVB (REG_WITH_INDEX (R1_IDX)->dname);
           R1INB++;
