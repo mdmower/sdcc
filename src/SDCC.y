@@ -259,7 +259,7 @@ postfix_expression
                            6.7.2p6), while a compound literal without a storage class has the
                            type written in it and nothing more (C11 6.5.2.5p4). */
                         sym1->etype = getSpec(sym1->type);
-                        if (constExprTree(list2expr(sym1->ival)))
+                        if (constExprIlist(sym1->ival))
                           {
                             SPEC_CONSTEXPR(sym1->etype) = 1;
                             SPEC_IMPLICIT_CONSTEXPR(sym1->etype) = 1;
@@ -1086,9 +1086,10 @@ member_declarator
    | ':' constant_expr
         {
           unsigned int bitsize;
+          value *val = constExprValue($2, true);
           $$ = newSymbol (genSymName(NestLevel), NestLevel);
-          bitsize = (unsigned int) ulFromVal(constExprValue($2, true));
-          if (floatFromVal (constExprValue($2, true)) < 0)
+          bitsize = (unsigned int) ulFromVal(val);
+          if (floatFromVal (val) < 0)
               werror (E_NEGATIVE_BITFLD_SIZE);
           else if (!bitsize)
               bitsize = BITVAR_PAD;
@@ -1098,8 +1099,9 @@ member_declarator
    | declarator ':' constant_expr
         {
           unsigned int bitsize;
-          bitsize = (unsigned int) ulFromVal(constExprValue($3, true));
-          if (floatFromVal (constExprValue($3, true)) < 0)
+          value *val = constExprValue($3, true);
+          bitsize = (unsigned int) ulFromVal(val);
+          if (floatFromVal (val) < 0)
               werror (E_NEGATIVE_BITFLD_SIZE);
           else if (!bitsize)
             {
