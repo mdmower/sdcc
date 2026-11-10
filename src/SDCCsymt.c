@@ -6187,7 +6187,7 @@ prepareDeclarationSymbol (attribute *attr, sym_link *declSpecs, symbol *initDecl
         if (IS_PTR (l0))
           break;
       /* perform sanity checks concerning constexpr initialization */
-      if (IS_CONSTEXPR (declSpecs) && (sym->ival == NULL || !constExprTree (list2expr (sym->ival))))
+      if (IS_CONSTEXPR (declSpecs) && (sym->ival == NULL || !constExprIlist (sym->ival)))
         {
           /* constexpr must be initialized with a constant expression (duh!) */
           werror (sym->ival ? E_CONST_EXPECTED : E_CONSTEXPR_WITHOUT_INIT);
