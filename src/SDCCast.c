@@ -1276,6 +1276,87 @@ findStructField (symbol *fields, symbol *target)
   return NULL; /* not found */
 }
 
+/*-----------------------------------------------------------------*/
+/* createIvalPart - generates the initial value for the part DESIG */
+/*   names of SYM, which has its initial value otherwise. Nothing  */
+/*   but that part changes (C11 6.7.9p19).                         */
+/*-----------------------------------------------------------------*/
+static ast *
+createIvalPart (ast *sym, sym_link *type, designation *desig, initList *ilist, ast *wid, ast *rootValue)
+{
+  for (; desig; desig = desig->next)
+    {
+      symbol *sflds;
+
+      if (desig->type == DESIGNATOR_STRUCT && IS_STRUCT (type) &&
+          (sflds = findStructField (SPEC_STRUCT (type)->fields, desig->designator.tag)))
+        {
+          sflds->implicit = 1;
+          sym = newNode (PTR_OP, newNode ('&', sym, NULL), newAst_VALUE (symbolVal (sflds)));
+          type = sflds->type;
+        }
+      else if (desig->type == DESIGNATOR_ARRAY && IS_ARRAY (type) &&
+               (!DCL_ELEM (type) || desig->designator.elemno < (int) DCL_ELEM (type)))
+        {
+          sym = newNode ('[', sym, newAst_VALUE (valueFromLit ((float) desig->designator.elemno)));
+          type = type->next;
+        }
+      else
+        {
+          werrorfl (ilist->filename, ilist->lineno, E_BAD_DESIGNATOR);
+          return wid;
+        }
+      sym = decorateType (resolveSymbols (sym), RESULT_TYPE_NONE, true);
+    }
+
+  return createIval (sym, type, ilist, wid, rootValue, 1);
+}
+
+/*-----------------------------------------------------------------*/
+/* designatedIlist - createIvalStruct() takes the designated       */
+/*   initializers of a list first, each for a member of its own,   */
+/*   and gives the ones behind them to the members that follow the */
+/*   last one designated. Any other list with designators is       */
+/*   brought into that form here: one designated initializer for   */
+/*   each member that has any. PARTS is as for reorderIlistCode(). */
+/*-----------------------------------------------------------------*/
+static initList *
+designatedIlist (sym_link *type, initList *ilist, initList **parts)
+{
+  initList *iloop, *jloop, *head = NULL, **end = &head;
+  symbol *sflds = SPEC_STRUCT (type)->fields;
+  bool asis = true;
+
+  for (iloop = ilist->init.deep; iloop && iloop->designation; iloop = iloop->next)
+    for (jloop = ilist->init.deep; jloop != iloop; jloop = jloop->next)
+      if (iloop->designation->type == DESIGNATOR_STRUCT && jloop->designation->type == DESIGNATOR_STRUCT &&
+          !strcmp (iloop->designation->designator.tag->name, jloop->designation->designator.tag->name))
+        asis = false;
+  /* a union takes one initializer, the others are surplus as they were */
+  for (; iloop && SPEC_STRUCT (type)->type != UNION; iloop = iloop->next)
+    if (iloop->designation)
+      asis = false;
+  if (asis || !sflds)
+    return ilist->init.deep;
+
+  ilist = reorderIlistCode (type, ilist, parts);
+  for (iloop = ilist ? ilist->init.deep : NULL; sflds && iloop; sflds = sflds->next)
+    {
+      if (IS_BITFIELD (sflds->type) && SPEC_BUNNAMED (sflds->etype))
+        continue;
+      if (iloop->type != INIT_HOLE)
+        {
+          iloop->designation = newDesignation (DESIGNATOR_STRUCT, sflds);
+          *end = iloop;
+          end = &iloop->next;
+        }
+      iloop = iloop->next;
+    }
+  *end = NULL;
+
+  return head;
+}
+
 static int aggregateIsAutoVar = 0;
 
 /*-----------------------------------------------------------------*/
@@ -1291,7 +1372,8 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
   if (ilist && ilist->type != INIT_DEEP)
     return createIvalType (sym, type, ilist);
 
-  initList *iloop = ilist ? ilist->init.deep : NULL;
+  initList *parts = NULL;
+  initList *iloop = ilist ? designatedIlist (type, ilist, &parts) : NULL;
 
   set *initialized_fields = newSet ();
 
@@ -1498,6 +1580,9 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
     }
 
 release:
+  for (; parts; parts = parts->next)
+    rast = createIvalPart (sym, type, parts->designation, parts, rast, rootValue);
+
   deleteSet (&initialized_fields);
 
   return rast;
@@ -1510,7 +1595,7 @@ static ast *
 createIvalArray (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
 {
   ast *rast = NULL;
-  initList *iloop;
+  initList *iloop, *elem, *parts = NULL;
   int lcnt = 0, size = 0, idx = 0;
   literalList *literalL;
   sym_link *etype = getSpec (type);
@@ -1571,6 +1656,17 @@ createIvalArray (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
     }
   else
     {
+      /* With designators, take the initializers in the order of the elements,
+         all those for one element together, and a hole for an element that
+         has none: it is zeroed like the ones behind the last initializer. */
+      for (elem = iloop; elem && !elem->designation; elem = elem->next)
+        ;
+      if (elem)
+        {
+          ilist = reorderIlistCode (type, ilist, &parts);
+          iloop = ilist ? ilist->init.deep : NULL;
+        }
+
       for (;;)
         {
           ast *aSym;
@@ -1609,13 +1705,29 @@ createIvalArray (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
               break;
             }
 
+          elem = iloop;
+          if (iloop && iloop->type == INIT_HOLE)
+            {
+              /* static storage is zero as it is */
+              if (!AST_SYMBOL (rootValue)->islocal)
+                {
+                  idx++;
+                  iloop = iloop->next;
+                  continue;
+                }
+              elem = NULL;
+            }
+
           aSym = newNode ('[', sym, newAst_VALUE (valueFromLit ((float) (idx))));
           setAstFileLine (aSym, iloop ? iloop->filename : sym->filename, iloop ? iloop->lineno : sym->lineno);
           aSym = decorateType (resolveSymbols (aSym), RESULT_TYPE_NONE, true);
-          rast = createIval (aSym, type->next, iloop, rast, rootValue, 0);
+          rast = createIval (aSym, type->next, elem, rast, rootValue, 0);
           idx++;
           iloop = (iloop ? iloop->next : NULL);
         }
+
+      for (; parts; parts = parts->next)
+        rast = createIvalPart (sym, type, parts->designation, parts, rast, rootValue);
     }
 
   /* if we have not been given a size  */
