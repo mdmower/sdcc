@@ -8,7 +8,6 @@
 
 /* PR middle-end/87053 */
 
-#if 0
 const union
 { struct {
     char x[4];
@@ -18,14 +17,11 @@ const union
     char z[8];
   };
 } u = {{"1234", "567"}};
-#endif
 
 void
 testTortureExecute (void)
 {
-#if 0 // Bug
   if (strlen (u.z) != 7)
     ASSERT (0);
-#endif
 }
 

@@ -1329,14 +1329,26 @@ designatedIlist (sym_link *type, initList *ilist, initList **parts)
   symbol *sflds = SPEC_STRUCT (type)->fields;
   bool asis = true;
 
+  /* The initializers of an anonymous struct or union may be in braces of
+     their own. Those go first: createIvalStruct() matches a flat list
+     against the members promoted out of it, and the designators that were
+     in such braces count here like the others. */
+  iloop = newiList (INIT_DEEP, NULL);
+  *iloop = *ilist;
+  iloop->init.deep = unbraceAnonIlist (type, ilist->init.deep, true);
+  ilist = iloop;
+
   for (iloop = ilist->init.deep; iloop && iloop->designation; iloop = iloop->next)
     for (jloop = ilist->init.deep; jloop != iloop; jloop = jloop->next)
       if (iloop->designation->type == DESIGNATOR_STRUCT && jloop->designation->type == DESIGNATOR_STRUCT &&
           !strcmp (iloop->designation->designator.tag->name, jloop->designation->designator.tag->name))
         asis = false;
-  /* a union takes one initializer, the others are surplus as they were */
+  /* a union takes one initializer, the others are surplus as they were.
+     A hole, for a member that such braces left out, counts from the member
+     ahead of it in the list, which only the reordering gets right after a
+     designator. */
   for (; iloop && SPEC_STRUCT (type)->type != UNION; iloop = iloop->next)
-    if (iloop->designation)
+    if (iloop->designation || (iloop->type == INIT_HOLE && ilist->init.deep->designation))
       asis = false;
   if (asis || !sflds)
     return ilist->init.deep;
@@ -1556,20 +1568,25 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
       /* if we have come to end */
       else if (!iloop && (!AST_SYMBOL (rootValue)->islocal || SPEC_STAT (etype)))
         break;
+      /* nor does a member that the braces around the initializers of an
+         anonymous struct or union left out (see unbraceAnonIlist()) */
+      else if (iloop && iloop->type == INIT_HOLE && (!AST_SYMBOL (rootValue)->islocal || SPEC_STAT (etype)))
+        {
+          iloop = iloop->next;
+          continue;
+        }
 
-      /* initialize this field */
+      /* initialize this field. A union is initialized through its first
+         member only, but that can be an anonymous struct of several: its
+         members are the ones not marked as aliases, which got this far. */
       sflds->implicit = 1;
       lAst = newNode (PTR_OP, newNode ('&', sym, NULL), newAst_VALUE (symbolVal (sflds)));
       lAst = decorateType (resolveSymbols (lAst), RESULT_TYPE_NONE, true);
-      rast = decorateType (resolveSymbols (createIval (lAst, sflds->type, positional ? iloop : NULL, rast, rootValue, 1)), RESULT_TYPE_NONE, true);
+      rast = decorateType (resolveSymbols (createIval (lAst, sflds->type, positional && iloop && iloop->type != INIT_HOLE ? iloop : NULL, rast, rootValue, 1)), RESULT_TYPE_NONE, true);
       addSet (&initialized_fields, sflds);
       prevEnd = fieldEndBit (sflds);
       if (positional)
         iloop = iloop ? iloop->next : NULL;
-
-      /* Unions can only initialize a single field */
-      if (SPEC_STRUCT (type)->type == UNION)
-        break;
     }
 
   if (iloop)

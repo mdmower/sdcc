@@ -576,6 +576,169 @@ nextInitSlot (sym_link * type, int slot)
 }
 
 /*------------------------------------------------------------------*/
+/* anonGroupEnd - promoteAnonStructs() replaces an anonymous struct */
+/*   or union by its members and marks the first and the last of    */
+/*   them. Return the slot of the last member of the anonymous      */
+/*   struct or union that starts at SLOT: the outermost one for     */
+/*   LEVEL 0, the one that starts within it at the same member for  */
+/*   LEVEL 1, and so on; -1 if there is none.                       */
+/*------------------------------------------------------------------*/
+static int
+anonGroupEnd (sym_link * type, int slot, int level)
+{
+  symbol *fields = findStructFieldAt (type, slot);
+  int depth = 0;
+
+  if (!fields || fields->anonopen <= level)
+    return -1;
+
+  for (; fields; fields = fields->next)
+    {
+      /* skip past unnamed bitfields */
+      if (IS_BITFIELD (fields->type) && SPEC_BUNNAMED (fields->etype))
+        continue;
+      depth += fields->anonopen - fields->anonclose;
+      if (depth <= level)
+        return slot;
+      slot++;
+    }
+  return -1;
+}
+
+/*------------------------------------------------------------------*/
+/* designatedSlot - the slot of the member a designator names, -1   */
+/*                  if it does not name one                         */
+/*------------------------------------------------------------------*/
+static int
+designatedSlot (sym_link * type, designation * desig)
+{
+  symbol *fields;
+  int slot;
+
+  if (desig->type == DESIGNATOR_STRUCT)
+    for (slot = 0; (fields = findStructFieldAt (type, slot)); slot++)
+      if (!strcmp (fields->name, desig->designator.tag->name))
+        return slot;
+  return -1;
+}
+
+/*------------------------------------------------------------------*/
+/* bracesAnonGroup - are the braces around DEEP, found where the    */
+/*   anonymous struct or union of slots FIRST to LAST starts, the   */
+/*   braces of that struct or union?  There is no brace elision for */
+/*   an array or struct member, so when the first member is one and */
+/*   the list starts with something that cannot initialize it as a  */
+/*   whole, the braces are that member's own, and the ones of the   */
+/*   anonymous struct or union were left out.                       */
+/*------------------------------------------------------------------*/
+static bool
+bracesAnonGroup (sym_link * type, int first, int last, initList * deep)
+{
+  symbol *fields = findStructFieldAt (type, first);
+
+  if (!deep || !IS_AGGREGATE (fields->type))
+    return true;
+  if (deep->designation)
+    {
+      int slot = designatedSlot (type, deep->designation);
+
+      return slot >= first && slot <= last;
+    }
+  if (deep->type == INIT_DEEP)
+    return true;
+  /* a string literal for an array */
+  return IS_ARRAY (fields->type) && deep->type == INIT_NODE &&
+    deep->init.node->type == EX_VALUE && IS_ARRAY (deep->init.node->opval.val->type);
+}
+
+/*------------------------------------------------------------------*/
+/* unbraceAnonInit - append ILOOP, the initializers for the members */
+/*   from slot IDX on, to TAIL, without the braces that enclose the */
+/*   initializers of an anonymous struct or union: its members were */
+/*   promoted into the enclosing struct, and that is what the list  */
+/*   is matched against. A hole stands in for each member such      */
+/*   braces leave out, so that what follows them goes to the member */
+/*   after the anonymous struct or union.                           */
+/*   ILOOP starts LEVEL anonymous structs or unions deep at IDX. It */
+/*   was in braces of its own for the one ending at slot LAST,      */
+/*   unless LAST is negative.                                       */
+/*------------------------------------------------------------------*/
+static initList **
+unbraceAnonInit (sym_link * type, initList * iloop, int idx, int last, int level, bool skipaliases, initList ** tail)
+{
+  const int first = idx;
+
+  for (; iloop; iloop = iloop->next, level = 0)
+    {
+      initList *dst;
+      int end;
+
+      if (iloop->designation)
+        {
+          int slot = designatedSlot (type, iloop->designation);
+
+          if (last >= 0 && (slot < first || slot > last))
+            {
+              werrorfl (iloop->filename, iloop->lineno, E_BAD_DESIGNATOR);
+              continue;
+            }
+          /* the designator is looked up again, and diagnosed, by whoever
+             walks the list; here it only tells where the list goes on */
+          idx = slot < 0 ? 0 : slot;
+        }
+      else if (last >= 0 && idx > last)
+        {
+          werrorfl (iloop->filename, iloop->lineno, W_EXCESS_INITIALIZERS, "struct",
+                    findStructFieldAt (type, last)->name);
+          break;
+        }
+      else if (iloop->type == INIT_DEEP && (end = anonGroupEnd (type, idx, level)) >= 0 &&
+               bracesAnonGroup (type, idx, end, iloop->init.deep))
+        {
+          tail = unbraceAnonInit (type, iloop->init.deep, idx, end, level + 1, skipaliases, tail);
+          idx = skipaliases ? nextInitSlot (type, end) : end + 1;
+          continue;
+        }
+
+      dst = newiList (INIT_HOLE, NULL);
+      *dst = *iloop;
+      dst->next = NULL;
+      *tail = dst;
+      tail = &dst->next;
+      idx = skipaliases ? nextInitSlot (type, idx) : idx + 1;
+    }
+
+  for (; idx <= last; idx = skipaliases ? nextInitSlot (type, idx) : idx + 1)
+    {
+      *tail = newiList (INIT_HOLE, NULL);
+      tail = &(*tail)->next;
+    }
+
+  return tail;
+}
+
+/*------------------------------------------------------------------*/
+/* unbraceAnonIlist - the initializers ILOOP for the members of a   */
+/*   struct or union, with those of each anonymous struct or union  */
+/*   in it taken out of their own braces: {1, {2, 3}, 4} becomes    */
+/*   {1, 2, 3, 4}. SKIPALIASES as for reorderIlistFull().           */
+/*------------------------------------------------------------------*/
+initList *
+unbraceAnonIlist (sym_link * type, initList * iloop, bool skipaliases)
+{
+  symbol *fields;
+  initList *nlist = NULL;
+
+  for (fields = SPEC_STRUCT (type)->fields; fields && !fields->anonopen; fields = fields->next)
+    ;
+  if (!fields)
+    return iloop;
+
+  unbraceAnonInit (type, iloop, 0, -1, 0, skipaliases, &nlist);
+  return nlist;
+}
+
+/*------------------------------------------------------------------*/
 /* reorderIlistFull - expands an initializer list to match          */
 /*                designated initializers.                          */
 /*   SKIPALIASES is for a caller that initializes an anonymous      */
@@ -645,6 +808,9 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
 
   /* pull together all the initializers into an ordered list */
   iloop = ilist ? ilist->init.deep : NULL;
+  /* a list that comes with PARTS had this done by designatedIlist() already */
+  if (IS_STRUCT (type) && !parts)
+    iloop = unbraceAnonIlist (type, iloop, skipaliases);
   for (idx = 0 ; iloop ; iloop = iloop->next,
                          idx = skipaliases ? nextInitSlot (type, idx) : idx + 1)
     {
