@@ -2072,6 +2072,11 @@ loadDptrFromOperand (operand *op, bool loadBToo)
             {
               if (AOP (op)->aopu.aop_immd.from_cast_remat)
                 emitcode ("mov", "b,%s", opGet (op, AOP_SIZE (op) - 1, FALSE, FALSE));
+              else if (IFFUNC_ISBANKEDCALL (operandType (op)))
+                {
+                  /* The address of a banked function: the third byte is its bank, not a pointer type. */
+                  emitcode ("mov", "b,%s", opGet (op, AOP_SIZE (op) - 1, FALSE, FALSE));
+                }
               else
                 {
                   wassertl (FALSE, "need pointerCode");
