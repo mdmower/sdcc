@@ -2670,6 +2670,12 @@ isConformingBody (ast * pbody, symbol * sym, ast * body)
       break;
 
     default:
+      /* Any other operator that has the loop control variable as a direct operand uses its
+         value: a cast, for instance. The cases above only know the operators they list. */
+      if (IS_AST_SYM_VALUE (pbody->left) && isSymbolEqual (AST_SYMBOL (pbody->left), sym))
+        return false;
+      if (IS_AST_SYM_VALUE (pbody->right) && isSymbolEqual (AST_SYMBOL (pbody->right), sym))
+        return false;
       break;
     }
 
