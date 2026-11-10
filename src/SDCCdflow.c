@@ -27,12 +27,11 @@
 #include "common.h"
 
 /*-----------------------------------------------------------------*/
-/* ifKilledInBlock - will return 1 if the symbol is redefined in B */
+/* killedInBlock - will return 1 if the symbol is redefined in B   */
 /*-----------------------------------------------------------------*/
-DEFSETFUNC (ifKilledInBlock)
+static int
+killedInBlock (cseDef *cdp, eBBlock *src)
 {
-  cseDef *cdp = item;
-  V_ARG (eBBlock *, src);
   bitVect *outs;
 
   /* if this is a global variable and this block
@@ -91,6 +90,17 @@ DEFSETFUNC (ifKilledInBlock)
 }
 
 /*-----------------------------------------------------------------*/
+/* ifKilledInBlock - set function form of killedInBlock            */
+/*-----------------------------------------------------------------*/
+DEFSETFUNC (ifKilledInBlock)
+{
+  cseDef *cdp = item;
+  V_ARG (eBBlock *, src);
+
+  return killedInBlock (cdp, src);
+}
+
+/*-----------------------------------------------------------------*/
 /* mergeInExprs - copy the in expression if it dominates           */
 /*-----------------------------------------------------------------*/
 DEFSETFUNC (mergeInExprs)
@@ -125,6 +135,16 @@ DEFSETFUNC (mergeInExprs)
     {
       //if (dest != ebp)
       //  dest->inExprs = intersectSets (dest->inExprs, ebp->outExprs, THROW_DEST);
+
+      cseDef *cdp;
+
+      /* What this predecessor kills is killed for the blocks after dest as well, when they are
+         reached from dest without passing through their own dominator again: remember it.
+         Otherwise a call in a loop body removes a global from the loop header's incoming
+         expressions, but not from those of the block the loop exits to (bug #3727). */
+      for (cdp = setFirstItem (dest->inExprs); cdp; cdp = setNextItem (dest->inExprs))
+        if (killedInBlock (cdp, ebp) && !isinSetWith (dest->killedExprs, cdp, isCseDefEqual))
+          addSetHead (&dest->killedExprs, cdp);
 
       /* delete only if killed in this block*/
       deleteItemIf (&dest->inExprs, ifKilledInBlock, ebp);
