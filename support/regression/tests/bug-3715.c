@@ -101,3 +101,62 @@ testBug (void)
   ASSERT (!UNKNOWN_CPP);
   ASSERT (!UNKNOWN_STD);
 }
+
+/* __has_builtin failed the same way. It asked the compiler proper for its
+   built-in functions. */
+#ifdef __has_builtin
+#  if __has_builtin(__builtin_offsetof)
+#    define OFFSETOF(s, m) __builtin_offsetof (s, m)
+#  endif
+#  if __has_builtin(__builtin_unreachable)
+#    define UNREACHABLE() __builtin_unreachable ()
+#  endif
+#  if __has_builtin(__builtin_sdcc_bug_3715) || __has_builtin ( sdcc_bug_3715 )
+#    define UNKNOWN_BUILTIN 1
+#  endif
+#endif
+
+#ifdef OFFSETOF
+#  define HAS_OFFSETOF 1
+#else
+#  define HAS_OFFSETOF 0
+#  include <stddef.h>
+#  define OFFSETOF(s, m) offsetof (s, m)
+#endif
+#ifdef UNREACHABLE
+#  define HAS_UNREACHABLE 1
+#else
+#  define HAS_UNREACHABLE 0
+#  define UNREACHABLE()
+#endif
+#ifndef UNKNOWN_BUILTIN
+#  define UNKNOWN_BUILTIN 0
+#endif
+
+struct pair
+{
+  unsigned char a;
+  unsigned char b;
+};
+
+static unsigned char
+upToThree (unsigned char c)
+{
+  if (c > 3)
+    UNREACHABLE ();
+  return c;
+}
+
+void
+testBuiltin (void)
+{
+  ASSERT (OFFSETOF (struct pair, b) == 1);
+  ASSERT (upToThree (2) == 2);
+
+  ASSERT (!UNKNOWN_BUILTIN);
+#ifdef __SDCC
+  /* Built in for every port. */
+  ASSERT (HAS_OFFSETOF);
+  ASSERT (HAS_UNREACHABLE);
+#endif
+}
