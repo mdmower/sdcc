@@ -1043,7 +1043,7 @@ processParms (ast * func, value * defParm, ast ** actParm, int *parmNumber,     
       if (options.std_sdcc && (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_MOS6502_LIKE || TARGET_PIC_LIKE) &&
         IFFUNC_HASVARARGS (functype) &&
         (IS_CAST_OP (*actParm) ||
-          (IS_AST_SYM_VALUE (*actParm) && AST_VALUES (*actParm, cast.removedCast)) ||
+          AST_VALUES (*actParm, cast.removedCast) ||
           (IS_AST_LIT_VALUE (*actParm) && AST_VALUES (*actParm, cast.literalFromCast))))
         {
           /* Parameter was explicitly typecast; don't touch it. */

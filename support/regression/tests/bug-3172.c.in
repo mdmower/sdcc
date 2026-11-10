@@ -25,11 +25,9 @@ receive(const char *s, ...)
 	va_list ap;
 	
 	va_start(ap, s);
-#if defined(__SDCC) && defined(NOPROMOTE) && !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15)
-#if 0 // Bug #3172 not yet fixed.
+#if defined(NOPROMOTE) && (defined(__SDCC_mcs51) || defined (__SDCC_ds390) || defined (__SDCC_mos6502) || defined (__SDCC_mos65c02) || defined (__SDCC_pic14) || defined (__SDCC_pic16))
 	ASSERT(va_arg(ap, unsigned char) == 0x5a);
 	ASSERT(va_arg(ap, unsigned char) == 0xa5);
-#endif
 #else
 	ASSERT(va_arg(ap, int) == 0x5a);
 	ASSERT(va_arg(ap, int) == 0xa5);
