@@ -4116,6 +4116,27 @@ geniCodeReturn (operand *op)
 }
 
 /*-----------------------------------------------------------------*/
+/* geniCodeReturnStruct - gen icode for 'return' of the struct or  */
+/*                        union value of a call                    */
+/*-----------------------------------------------------------------*/
+static void
+geniCodeReturnStruct (ast *tree, int lvl)
+{
+  /* A struct or union is returned from an object: the code generators copy it from there to
+     the caller's object. A variable arrives at the return as that object, but the value of
+     a call as its address, which the code generators cannot return. That value is in an
+     object of its own, see geniCodeCall(): return that. */
+  operand *op = ast2iCode (tree, lvl + 1);
+  iCode *ic = iCodeChainEnd;
+
+  if (ic && ic->op == ADDRESS_OF && IC_RESULT (ic) == op && IS_TRUE_SYMOP (IC_LEFT (ic)))
+    op = operandFromSymbol (OP_SYMBOL (IC_LEFT (ic)), false);
+  else
+    wassert (0);
+  geniCodeReturn (op);
+}
+
+/*-----------------------------------------------------------------*/
 /* geniCodeIfx - generates code for extended if statement          */
 /*-----------------------------------------------------------------*/
 void
@@ -4650,6 +4671,13 @@ ast2iCode (ast * tree, int lvl)
       else
         ast2iCode (tree->right, lvl + 1);
       inlinedActive = oldInlinedActive;
+      return NULL;
+    }
+
+  /* the struct or union value of a call is returned from the object that holds it */
+  if (tree->opval.op == RETURN && IS_AST_OP (tree->right) && tree->right->opval.op == CALL && IS_STRUCT (tree->right->ftype))
+    {
+      geniCodeReturnStruct (tree->right, lvl);
       return NULL;
     }
 
