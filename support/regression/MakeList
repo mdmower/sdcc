@@ -412,12 +412,6 @@ EXCLUDE_pdk15-stack-auto += \
 	gte_20000910-1 \
 	gte_pr100453
 
-# SDCC Bug #3395
-EXCLUDE_mcs51-small-stack-auto += \
-	gte_pr30185
-EXCLUDE_mcs51-large-stack-auto += \
-	gte_pr30185
-
 # SDCC bug 3599
 EXCLUDE_s08-stack-auto += \
 	tst_gcc-torture-execute-930628-1
