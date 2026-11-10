@@ -2214,7 +2214,7 @@ constExprValue (ast * cexpr, int check)
     {
       /* then check if this is a literal array
          in code segment */
-      if (SPEC_SCLS (cexpr->etype) == S_CODE && SPEC_CVAL (cexpr->etype).v_char && IS_ARRAY (cexpr->ftype))
+      if (IS_AST_SYM_VALUE (cexpr) && SPEC_SCLS (cexpr->etype) == S_CODE && SPEC_CVAL (cexpr->etype).v_char && IS_ARRAY (cexpr->ftype))
         {
           value *val = valFromType (cexpr->ftype);
           SPEC_SCLS (val->etype) = S_LITERAL;
