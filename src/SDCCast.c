@@ -1848,10 +1848,18 @@ gatherAutoInit (symbol * autoChain, ast * block, int *stack)
   ast *init = NULL;
   ast *work;
   symbol *sym;
+  symbol *last;
   int oldInitMode = inInitMode;
 
+  /* The temporary symbols of compound literals are appended to this chain while it is walked,
+     and initialized by the recursive call below at that moment. The walk must not reach them:
+     one that keeps its initializer (constexpr) would be initialized a second time, after the
+     declaration that uses it. */
+  for (last = autoChain; last && last->next; last = last->next)
+    ;
+
   inInitMode = 1;
-  for (sym = autoChain; sym; sym = sym->next)
+  for (sym = autoChain; sym; sym = (sym == last) ? NULL : sym->next)
     {
       if (!sym->ival)
         continue;
