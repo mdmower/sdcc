@@ -4750,7 +4750,16 @@ ast2iCode (ast * tree, int lvl)
           return geniCodeBitwise (left, right, BITWISEAND, tree->ftype);
         }
       else
-        return geniCodeAddressOf (left);
+        {
+          operand *result = geniCodeAddressOf (left);
+
+          /* An array operand has already become a pointer to its first element, and comes back
+             as that. The address of an array points to the whole array, though: give the result
+             the type the tree was decorated with, so that arithmetic on it steps by arrays. */
+          if (tree->left && IS_ARRAY (tree->left->ftype) && IS_ITEMP (result) && tree->ftype && IS_PTR (tree->ftype))
+            setOperandType (result, tree->ftype);
+          return result;
+        }
 
     case '|':                  /* bitwise or & xor */
     case '^':
