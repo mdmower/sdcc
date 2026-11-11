@@ -1976,7 +1976,7 @@ outrwm(struct expr *esp, int r, a_uint v)
                                  */
                                 out_lw(esp->e_addr,0);
                                 if (oflag) {
-                                        outchk(3, 0);
+                                        outchk(3, 5);
                                         out_txb(2, esp->e_addr);
                                         *txtp++ = v;
 
@@ -2029,7 +2029,7 @@ outr3bm(struct expr * esp, int r, a_uint v)
 			 */
                         out_lw(esp->e_addr,0);
 			if (oflag) {
-                                outchk(4, 0);
+                                outchk(4, 5);
                                 out_txb(3, esp->e_addr);
                                 *txtp++ = v;
 
