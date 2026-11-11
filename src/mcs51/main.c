@@ -884,7 +884,9 @@ asmLineNodeFromLineNode (lineNode *ln)
     }
   *op = '\0';
 
-  if (*p == ';' || *p == ':' || *p == '=')
+  /* a label, an assignment, or a comment without an instruction.
+     In "nop; text" the comment follows the mnemonic directly.  */
+  if (*p == ':' || *p == '=' || (*p == ';' && !*inst))
     return aln;
 
   p = skip_spaces (p);
