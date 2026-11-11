@@ -3065,7 +3065,10 @@ geniCodeAddressOf (operand *op)
   sym_link *optype = operandType (op);
   sym_link *opetype = getSpec (optype);
 
-  if (IS_ITEMP (op) && IS_PTR (optype))
+  /* Lvalue iTemps of pointer type already have the type of the address,
+     except those that geniCodeArray marks with aggr2ptr. Those are
+     elements of arrays of pointers and have the type of the element. */
+  if (IS_ITEMP (op) && IS_PTR (optype) && !op->aggr2ptr)
     {
       op = operandFromOperand (op);
       op->isaddr = 0;
