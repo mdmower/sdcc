@@ -5590,10 +5590,15 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
         changePointer (LTYPE (tree));
       checkTypeSanity (LETYPE (tree), "(cast)");
 
-      /* if 'from' and 'to' are the same remove the superfluous cast,
-       * this helps other optimizations */
+      /* If 'from' and 'to' are the same, remove the superfluous cast, which
+       * helps other optimizations. An explicit cast of an operation is kept.
+       * The operation was decorated with the result type of the cast, and
+       * that can be the only reason why it has the type of the cast. When a
+       * copy of the operation is decorated again without the cast, as
+       * processParms () does with an argument, it is done in int. */
       if (!tree->values.cast.semDeref &&
-          compareTypeExact (LTYPE (tree), RTYPE (tree), -1, true) == 1)
+          compareTypeExact (LTYPE (tree), RTYPE (tree), -1, true) == 1 &&
+          (IS_AST_VALUE (tree->right) || tree->values.cast.implicitCast))
         {
           /* mark that the explicit cast has been removed,
            * for proper processing (no integer promotion) of explicitly typecasted variable arguments */
