@@ -2883,7 +2883,13 @@ afile(char *fs, char *ft, int wf)
 	switch(wf & 3) {
 	default:
 	case 0:	frmt = "r";	break;
-	case 1:	frmt = "w";	break;
+        /* sdas specific */
+        /* With "wb" the C library writes LF line endings on every host.
+         * sdar does not find the symbols of a .rel file that has CRLF
+         * line endings and debug information (bug #2970).
+         */
+        case 1: frmt = "wb";    break;
+        /* end sdas specific */
 	case 2:	frmt = "rb";	break;
 	case 3:	frmt = "wb";	break;
 	}
