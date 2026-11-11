@@ -479,8 +479,21 @@ FBYNAME (labelJTInRange)
       if (!lbl)
         return false;
 
-      dist = (pcDistance (currPl, lbl, true) +
-              pcDistance (currPl, lbl, false));
+      dist = pcDistance (currPl, lbl, true);
+      if (dist)
+        {
+          /* The label is before the jump table. dist is the distance from
+             the label to the end of currPl, and currPl is at least 1 byte
+             long. In the replacement, the table begins 4 bytes after the
+             place where currPl begins, and each jump in it is 2 bytes long. */
+          if (dist-1 +          /* from the label to currPl */
+              4+2*(i+1)         /* from currPl to the end of this jump */
+              > 127)            /* range of sjmp */
+            return false;
+          continue;
+        }
+
+      dist = pcDistance (currPl, lbl, false);
 
       /* three terms used to calculate allowable distance */
       /* Could be made more exact and port-specific. */
