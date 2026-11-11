@@ -105,7 +105,7 @@ machine(struct mne *mp)
 		 * Top 3 bits become the MSBs of the op-code.
 		 */
 		expr(&e);
-		outrwm(&e, R_J11, op << 8);
+		outrwm(&e, R_J11, op);
 		break;
 
 	case S_JMP16:
