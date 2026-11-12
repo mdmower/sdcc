@@ -414,6 +414,8 @@ ptrPseudoSymConvert (symbol * sym, iCode * dic, const char *name)
   /* now this really is an assignment to itself, make it so;
      it will be optimized out later */
   dic->op = '=';
+  /* an assignment whose result is marked as an address is a pointer set */
+  SET_ISADDR (IC_RESULT (dic), 0);
   ReplaceOpWithCheaperOp (&IC_RIGHT (dic), IC_RESULT (dic));
   IC_LEFT (dic) = NULL;
 #endif
