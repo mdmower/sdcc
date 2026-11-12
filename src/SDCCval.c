@@ -2636,7 +2636,8 @@ valUnaryPM (value * val, bool reduceType)
       else
         SPEC_CVAL (val->etype).v_int = -SPEC_CVAL (val->etype).v_int;
 
-      if (SPEC_NOUN (val->etype) == V_CHAR)
+      /* cheapestVal() gives 0 and 1 the type bool, which cannot hold -1 */
+      if (SPEC_NOUN (val->etype) == V_CHAR || IS_BOOLEAN (val->etype))
         {
           /* promote to 'signed int', cheapestVal() might reduce it again */
           SPEC_USIGN (val->etype) = 0;
@@ -3256,6 +3257,13 @@ valBitwise (value * lval, value * rval, int op, bool reduceType)
   val->type = computeType (lval->etype, rval->etype, RESULT_TYPE_CHAR, op);
   val->etype = getSpec (val->type);
   SPEC_SCLS (val->etype) = S_LITERAL;
+  /* cheapestVal() gives 0 and 1 the type bool, which does not have the
+     unsigned flag, and computeType() makes the result of an unsigned
+     char and such a bool a signed char. The result is an unsigned char
+     here, so that a value above 127 stays positive. */
+  if (IS_CHAR (val->etype) &&
+      (IS_BOOLEAN (lval->etype) && SPEC_USIGN (rval->etype) || IS_BOOLEAN (rval->etype) && SPEC_USIGN (lval->etype)))
+    SPEC_USIGN (val->etype) = 1;
 
   switch (op)
     {

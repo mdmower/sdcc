@@ -5262,6 +5262,11 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
       /* rewrite the tree */
       if (IS_LITERAL (RTYPE (tree)) && IS_LITERAL (LTYPE (tree)))
         {
+          /* Promote the operands even if the result is a char. The sum
+             of operands that were cast to char can wrap, and the range
+             of the constant is checked when it is assigned. */
+          if (resultTypeProp == RESULT_TYPE_CHAR)
+            resultTypeProp = RESULT_TYPE_NONE;
           tree->left = addCast (tree->left, resultTypeProp, true);
           tree->right = addCast (tree->right, resultTypeProp, true);
           rewriteAstNodeVal (tree, valPlus (valFromType (LETYPE (tree)), valFromType (RETYPE (tree)), reduceTypeAllowed));
@@ -5420,6 +5425,11 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
       /* rewrite the tree */
       if (IS_LITERAL (RTYPE (tree)) && IS_LITERAL (LTYPE (tree)))
         {
+          /* Promote the operands even if the result is a char. The
+             difference of operands that were cast to char can wrap, and
+             the range of the constant is checked when it is assigned. */
+          if (resultTypeProp == RESULT_TYPE_CHAR)
+            resultTypeProp = RESULT_TYPE_NONE;
           tree->left = addCast (tree->left, resultTypeProp, true);
           tree->right = addCast (tree->right, resultTypeProp, true);
           rewriteAstNodeVal (tree, valMinus (valFromType (LETYPE (tree)), valFromType (RETYPE (tree)), reduceTypeAllowed));
@@ -5644,7 +5654,15 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
 
       /* make smaller type only if it's a LEFT_OP */
       if (tree->opval.op == LEFT_OP)
-        tree->left = addCast (tree->left, resultTypeProp, true);
+        {
+          /* Promote the left operand when both operands are constants,
+             even if the result is a char. The result of a shift of an
+             operand that was cast to char can wrap, and the range of
+             the constant is checked when it is assigned. */
+          if (resultTypeProp == RESULT_TYPE_CHAR && IS_LITERAL (LTYPE (tree)) && IS_LITERAL (RTYPE (tree)))
+            resultTypeProp = RESULT_TYPE_NONE;
+          tree->left = addCast (tree->left, resultTypeProp, true);
+        }
 
       propagateConstExpr (&tree->left, resultType, reduceTypeAllowed);
       propagateConstExpr (&tree->right, resultType, reduceTypeAllowed);
