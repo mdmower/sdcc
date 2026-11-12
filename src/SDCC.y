@@ -3170,6 +3170,9 @@ declaration_list
          werror (E_VLA_OBJECT);
        else*/
          addSymChain(&$1);
+       /* addSymChain() takes a symbol out of the chain when it declares an identifier of this block again */
+       if ($$)
+         $$ = $1;
      }
 
    | declaration_list declaration
@@ -3179,9 +3182,12 @@ declaration_list
        /* if this is a typedef */
        if ($2 && IS_TYPEDEF($2->etype)) {
          allocVariables ($2);
+         addSymChain(&$2);
          $$ = $1;
        }
        else {
+         /* addSymChain() takes a symbol out of the chain when it declares an identifier of this block again */
+         addSymChain(&$2);
          /* get to the end of the previous decl */
          if ( $1 ) {
            $$ = sym = $1;
@@ -3195,8 +3201,8 @@ declaration_list
        ignoreTypedefType = 0;/*printf("2 %s %d %d\n", $1->name, IS_ARRAY ($1->type), DCL_ARRAY_VLA ($1->type));
        if (IS_ARRAY ($2->type) && DCL_ARRAY_VLA ($2->type))
          werror (E_VLA_OBJECT);
-       else*/
-         addSymChain(&$2);
+       else
+         addSymChain(&$2);*/
      }
    ;
 
