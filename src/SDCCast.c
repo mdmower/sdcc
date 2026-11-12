@@ -79,6 +79,7 @@ ast *optimizeGetWord (ast *, RESULT_TYPE);
 static ast *backPatchLabels (ast *, symbol *, symbol *);
 static void copyAstLoc (ast *, ast *);
 static ast *gatherAutoInit (symbol *, ast *, int *);
+static bool placeCompLitInit (ast **, long, ast *, symbol *, ast *);
 void gatherImplicitVariables (ast *, ast *);
 void PA (ast * t);
 int inInitMode = 0;
@@ -2090,6 +2091,12 @@ gatherAutoInit (symbol * autoChain, ast * block, int *stack)
           // if this is a constexpr, keep the ival for compile-time evaluation
           if (!(IS_CONSTEXPR (sym->etype)))
             sym->ival = NULL;
+          /* The object of a compound literal gets its value each time the literal is
+             evaluated, and not when control enters the block. A literal in an initializer
+             is not in the tree of the block yet, and the caller puts its initialization
+             in front of the initialization that reads it. */
+          if (sym->complitobj && block && placeCompLitInit (NULL, NULLOP, block, sym, work))
+            continue;
           if (init)
             init = newNode (NULLOP, init, work);
           else
@@ -3351,6 +3358,76 @@ getLeftResultType (ast * tree, RESULT_TYPE resultType)
     }
 }
 
+/*-----------------------------------------------------------------*/
+/* placeCompLitInit - puts INIT, which initializes the object SYM  */
+/*                    of a compound literal, in front of the       */
+/*                    statement or expression in TREE that         */
+/*                    evaluates the literal. *PLACE is the nearest */
+/*                    statement (OP is NULLOP) or expression (OP   */
+/*                    is ',') whose evaluation always includes     */
+/*                    TREE. Returns false if the literal is not    */
+/*                    in TREE                                      */
+/*-----------------------------------------------------------------*/
+static bool
+placeCompLitInit (ast **place, long op, ast *tree, symbol *sym, ast *init)
+{
+  ast **rplace = place;
+  long rop = op;
+
+  if (!tree)
+    return false;
+
+  if (IS_AST_SYM_VALUE (tree) && isSymbolEqual (AST_SYMBOL (tree), sym))
+    {
+      init = newNode (op, init, *place);
+      copyAstLoc (init, *place);
+      *place = init;
+      return true;
+    }
+
+  if (!IS_AST_OP (tree))
+    return false;
+
+  /* decorateType() does not visit the operands of a node that it has decorated,
+     so a new node goes above such a node. */
+  if (!tree->decorated)
+    switch (tree->opval.op)
+      {
+      case SIZEOF:
+      case COUNTOF:
+        /* The operand is not evaluated, so a literal in it does not need its value. */
+        return astHasSymbol (tree->right, sym);
+      case FOR:
+        if (placeCompLitInit (&AST_FOR (tree, initExpr), ',', AST_FOR (tree, initExpr), sym, init) ||
+            placeCompLitInit (&AST_FOR (tree, condExpr), ',', AST_FOR (tree, condExpr), sym, init) ||
+            placeCompLitInit (&AST_FOR (tree, loopExpr), ',', AST_FOR (tree, loopExpr), sym, init))
+          return true;
+        /* fall through */
+      case BLOCK:
+      case NULLOP:
+      case LABEL:
+      case CRITICAL:
+        /* The operands are statements. */
+        place = &tree->left;
+        rplace = &tree->right;
+        op = rop = NULLOP;
+        break;
+      case ':':
+        place = &tree->left;
+        op = ',';
+        /* fall through */
+      case AND_OP:
+      case OR_OP:
+      case ',':
+        /* The right operand is evaluated after the left one, or not at all. */
+        rplace = &tree->right;
+        rop = ',';
+        break;
+      }
+
+  return placeCompLitInit (place, op, tree->left, sym, init) || placeCompLitInit (rplace, rop, tree->right, sym, init);
+}
+
 /*------------------------------------------------------------------*/
 /* gatherImplicitVariables:  adds the symbols created by            */
 /*            replaceAstWithTemporary to the declarations list of   */
@@ -3408,7 +3485,16 @@ gatherImplicitVariables (ast *tree, ast *block)
 
           *decl = tempsym;
           AST_SYMBOL (tree)->iscomplit = false;
+          tempsym->complitobj = true;
         }
+    }
+
+  /* the expressions of a for statement are not operands of its node */
+  if (IS_FOR_STMT (tree))
+    {
+      gatherImplicitVariables (AST_FOR (tree, initExpr), block);
+      gatherImplicitVariables (AST_FOR (tree, condExpr), block);
+      gatherImplicitVariables (AST_FOR (tree, loopExpr), block);
     }
 
   /* If entering a block with symbols defined, mark the symbols in-scope */
