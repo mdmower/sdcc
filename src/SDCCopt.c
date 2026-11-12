@@ -4032,7 +4032,8 @@ eBBlockFromiCode (iCode *ic)
   if (!options.lessPedantic)
     {
       // this is a good place to check missing return values
-      if (currFunc)
+      // the code that initializes the static variables of a function does not return
+      if (currFunc && GcurMemmap != statsg)
         {
           // the user is on his own with naked functions...
           if (!IS_VOID(currFunc->etype) && !FUNC_ISNAKED(currFunc->type))

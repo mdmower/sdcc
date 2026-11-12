@@ -545,6 +545,14 @@ createStackSpil (symbol * sym)
      we need to allocate this on the stack : this is really a
      hack!! but cannot think of anything better at this time */
 
+  /* A spill location is a local variable of a function. The code that
+     initializes a global variable is not part of a function. */
+  if (!currFunc)
+    {
+      werror (E_CONST_EXPECTED);
+      exit (1);
+    }
+
   dbuf_init (&dbuf, 128);
   dbuf_printf (&dbuf, "sloc%d", _G.slocNum++);
   sloc = newiTemp (dbuf_c_str (&dbuf));
