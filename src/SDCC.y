@@ -2987,7 +2987,10 @@ opt_stag
 stag
    : identifier
         {  /* add name to structure table */
-          ignoreTypedefType = 0;
+          /* Identifiers that follow the tag are declarator names, even when
+             typedefs of those names are visible. The lexer clears the flag
+             at '{'. */
+          ignoreTypedefType = 1;
           $$ = newStruct($1->name);
           $$->level = NestLevel;
           $$->block = currBlockno;
