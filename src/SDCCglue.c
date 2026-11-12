@@ -1110,20 +1110,47 @@ fieldHasIval (symbol *field)
 }
 
 /*-----------------------------------------------------------------*/
+/* anonLast - promoteAnonStructs() replaces an anonymous struct or */
+/*   union by its members and marks the first and the last of      */
+/*   them. Return the last member of the one that starts at SFLDS: */
+/*   of the outermost one for LEVEL 0, of the one that starts      */
+/*   within it at the same member for LEVEL 1, and so on. That is  */
+/*   SFLDS itself when fewer of them start there.                  */
+/*-----------------------------------------------------------------*/
+static symbol *
+anonLast (symbol *sflds, int level)
+{
+  int depth = 0;
+
+  for ( ; sflds; sflds = sflds->next)
+    {
+      depth += sflds->anonopen - sflds->anonclose;
+      if (depth <= level)
+        break;
+    }
+  return sflds;
+}
+
+/*-----------------------------------------------------------------*/
 /* designatedAlternative - an anonymous union is initialized       */
 /*   through its first alternative, which is what the walk in      */
 /*   printIvalStruct() emits. A designated initializer can pick    */
 /*   another one instead ({.d = 5}), and reorderIlistIval() fills  */
 /*   a promoted member's slot only in that case. If the union      */
 /*   starting at SFLDS has one, return that member, its            */
-/*   initializer, and the field the union ends before.             */
+/*   initializer, and the field the union ends before. ISUNION is  */
+/*   true when SFLDS is the first member of a union type, which is */
+/*   then searched like an anonymous union that ends with the      */
+/*   member list. The walk keeps KEPT between the calls.           */
 /*-----------------------------------------------------------------*/
 static symbol *
-designatedAlternative (symbol *sflds, initList *iloop, initList **ilist, symbol **after)
+designatedAlternative (symbol *sflds, bool isunion, initList *iloop, initList **ilist, symbol **after, symbol **kept)
 {
   symbol *f, *desig = NULL;
   initList *desigilist = NULL;
+  initList *firstilist = iloop;
   int base = -1;
+  int level;
 
   for (f = sflds; f; f = f->next)
     {
@@ -1148,11 +1175,81 @@ designatedAlternative (symbol *sflds, initList *iloop, initList **ilist, symbol 
     }
 
   /* only when sflds is where that union starts */
-  if (!desig || base != (int) sflds->offset)
-    return NULL;
-
+  if (base != (int) sflds->offset)
+    desig = NULL;
   *ilist = desigilist;
   *after = f;
+
+  /* The loop above looks at the row of marked members that follows sflds.
+     That row is not all of a union whose first alternative has an
+     anonymous union of its own and members after it. For
+       union { struct { union { char p; char q; }; char r; }; char s; }
+     the members are p, q, r, and s, and the row ends before r. So look at
+     each union that starts at sflds, from the outermost one, up to the end
+     that promoteAnonStructs() marked, for the first one that has an
+     initializer in its other alternatives. The member of that initializer
+     is the alternative when the union has no other initializer and the row
+     gave none. Any other set of initializers can name two alternatives.
+     The one written later then replaces the other (C11 6.7.9p19), and the
+     reordered list does not have the order in which they were written. So
+     the result of the row stands, and the unions within that union are not
+     searched this way, up to its last member *kept. */
+  for (f = sflds; f && f != *kept; f = f->next)
+    ;
+  if (f)
+    return desig;
+
+  for (level = isunion ? -1 : 0; level < (int) sflds->anonopen; level++)
+    {
+      symbol *head = anonLast (sflds, level + 1);     /* the end of the first alternative */
+      symbol *last = level < 0 ? NULL : anonLast (sflds, level);
+      symbol *other = NULL;
+      initList *otherilist = NULL;
+      int nfirst = 0, nother = 0;
+      bool infirst = true;
+
+      iloop = firstilist;
+      for (f = sflds; ; f = f->next)
+        {
+          if (fieldHasIval (f))
+            {
+              /* in a struct, the member after the first one is not marked */
+              if (!infirst && !f->anonunionalias)
+                {
+                  nother = 0;
+                  break;
+                }
+              if (iloop && iloop->type != INIT_HOLE)
+                {
+                  if (infirst)
+                    nfirst++;
+                  else
+                    {
+                      nother++;
+                      other = f;
+                      otherilist = iloop;
+                    }
+                }
+              iloop = iloop ? iloop->next : NULL;
+            }
+          if (f == head)
+            infirst = false;
+          if (f == last || !f->next)
+            break;
+        }
+      if (!nother)
+        continue;
+
+      if (!desig && nother == 1 && !nfirst && !IS_BITFIELD (other->type))
+        {
+          *ilist = otherilist;
+          *after = f->next;
+          return other;
+        }
+      *kept = f;
+      break;
+    }
+
   return desig;
 }
 
@@ -1243,13 +1340,17 @@ printIvalStruct (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oB
         sflds = sflds->next;
 
       unsigned int written = 0;     /* bytes emitted = offset of the next byte */
+      bool isunion = SPEC_STRUCT (type)->type == UNION;       /* sflds is the first member of a union */
+      symbol *kept = NULL;          /* for designatedAlternative() */
 
       while (sflds)
         {
           unsigned int oldoffset = sflds->offset;
           initList *desigilist = NULL;
           symbol *after = NULL;
-          symbol *desig = designatedAlternative (sflds, iloop, &desigilist, &after);
+          symbol *desig = designatedAlternative (sflds, isunion, iloop, &desigilist, &after, &kept);
+
+          isunion = false;
 
           if (desig)
             {
