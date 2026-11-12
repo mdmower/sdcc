@@ -326,6 +326,7 @@ typedef struct symbol
   unsigned undefined:1;             /* undefined variable                */
   bool implicitaddtoblock:1;        /* implicit temporary to be added to block later, once that block exists */
   unsigned iscomplit:1;             /* is a temporary symbol for a compound literal */
+  unsigned complitobj:1;            /* is the object of a compound literal, in the declarations list of a block */
   unsigned _isparm:1;               /* is a parameter          */
   unsigned ismyparm:1;              /* is parameter of the function being generated */
   unsigned isitmp:1;                /* is an intermediate temp */
