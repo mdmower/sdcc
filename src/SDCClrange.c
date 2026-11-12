@@ -1001,7 +1001,9 @@ static void visit (set **visited, iCode *ic, const int key)
           break;
         default:
           ic = ic->next;
-          if (!POINTER_SET (ic) && IC_RESULT (ic) && IS_SYMOP (IC_RESULT (ic)) && OP_SYMBOL_CONST (IC_RESULT (ic))->key == key)
+          /* The code that initializes a variable is not in a function, and
+             it can end while the symbol is alive. */
+          if (ic && !POINTER_SET (ic) && IC_RESULT (ic) && IS_SYMOP (IC_RESULT (ic)) && OP_SYMBOL_CONST (IC_RESULT (ic))->key == key)
             {
               addSet (visited, ic);
               return;
