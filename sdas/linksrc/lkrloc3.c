@@ -686,6 +686,22 @@ relr3(void)
 				}
 			}
 		}
+
+/* sdld specific */
+                /*
+                 * R3_BYTE with R_BYT3 offset adjust
+                 *
+                 * The T line has a_bytes bytes for the byte, and one
+                 * of them is output. With R3_BYTX the adjustment is
+                 * made above. This one is made after the error
+                 * processing, so that the offset in an error message
+                 * is the one of the byte in front of the output byte.
+                 */
+                if ((mode & R3_BYTE) && (mode & R_BYT3) &&
+                    !(mode & R3_BYTX)) {
+                        rtofst += (a_bytes - 1);
+                }
+/* end sdld specific */
 	}
 	if (uflag != 0) {
 		lkulist(1);
