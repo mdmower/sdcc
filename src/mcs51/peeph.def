@@ -4276,6 +4276,8 @@ replace restart {
 	; peephole 257.b jumped to %6 directly instead of via %5.
 } if label5IsUncondJumpTo6(), labelInRange(%6), notSame(%5 %6), labelRefCountChange(%5 -1), labelRefCountChange(%6 +1)
 
+// The ljmp is 1 byte longer than the sjmp. For this rule, instructionSize()
+// in main.c counts an sjmp as 3 bytes.
 replace restart {
 	sjmp	%5
 } by {

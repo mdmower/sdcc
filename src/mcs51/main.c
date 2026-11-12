@@ -560,7 +560,10 @@ instructionSize(char *inst, char *op1, char *op2)
   if (ISINST ("lcall")) return 3;
   if (ISINST ("ret")) return 1;
   if (ISINST ("ljmp")) return 3;
-  if (ISINST ("sjmp")) return 2;
+  /* An sjmp is 2 bytes long. Peephole rule 257.c can replace it by an ljmp
+     after labelInRange() has accepted a short jump across it, so it counts
+     with the size of the ljmp. */
+  if (ISINST ("sjmp")) return 3;
   if (ISINST ("rlc")) return 1;
   if (ISINST ("rrc")) return 1;
   if (ISINST ("rl")) return 1;
