@@ -183,25 +183,12 @@ testDesignatedNestedUnion (void)
 
       /* At file scope the object is built by printIvalStruct() instead, on
          the targets that emit an initialized global as a data image. That
-         walks the flat member list too, and takes a run of members promoted
-         out of an anonymous union for a whole union; under nesting the run
-         is only part of one, so the designated alternative goes unrecognized
-         and its value is dropped. The image reads 01 00 00 00 04 where
-         01 00 09 00 04 is right. The members outside the union are placed
-         correctly either way, so they are checked here. */
+         walks the flat member list too, in which r separates s, t, and u from
+         p, the member the outer union starts at. The image is
+         01 00 09 00 04. */
       ASSERT (gt.a == 1);
       ASSERT (gt.z == 4);
-#if 0 /* still fails wherever an initialized global becomes a data image -
-         z80, stm8 and hc08 among others. The targets that generate code for
-         one instead, mcs51 and pdk14 among them, already get this right, so
-         the checks are compiled out rather than excluded per port.
-         Not addressed here: it predates this series, and the union's extent
-         cannot be recovered from the flat list at all - y sits at the byte
-         where the first alternative ends, so no scan over member offsets can
-         tell that it belongs to the union. Fixing it means letting the
-         initializer walk see the nesting the flattening discards. */
       ASSERT (gt.t == 9);
       ASSERT (gt.s == 0);
       ASSERT (gt.u == 0);
-#endif
 }
