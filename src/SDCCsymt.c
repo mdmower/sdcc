@@ -2728,7 +2728,12 @@ leaveBlockScope (int block)
               /* Temporary fix for bug #3289 - leave enums in scope. */
               /* This is also buggy but compatible with 4.1.0 and    */
               /* earlier behavior and less likely to trigger errors. */
-              if (sym->etype && SPEC_ENUM(sym->etype))
+              /* It applies to enumeration constants only. BLOCK     */
+              /* nodes do not list them, so resolveSymbols() cannot  */
+              /* mark them as in scope again. Objects and typedef    */
+              /* names of an enumerated type are marked out of scope */
+              /* like the symbols of other types.                    */
+              if (sym->etype && SPEC_ENUM(sym->etype) && IS_LITERAL(sym->etype))
                 continue;
               /* Everything else, mark as out of scope. */
               sym->isinscope = 0;
