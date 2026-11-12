@@ -64,6 +64,8 @@ typedef struct initList
   int lineno;
   const char *filename;
   bool isempty;                         // C23 empty initializer
+  bool inexact;                         // the initializer after this one, or after one in this list, is not
+                                        // assigned to the member that C assigns it to (see unbraceAnonInit())
   struct designation *designation;
   union
   {

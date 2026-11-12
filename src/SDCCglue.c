@@ -1243,6 +1243,37 @@ designatedAlternative (symbol *sflds, bool isunion, initList *iloop, initList **
 }
 
 /*-----------------------------------------------------------------*/
+/* noOtherAlternative - is every member of FIELDS that has an      */
+/*   initializer in ILIST in the same alternative as FIELD, of     */
+/*   each union that has both?  ILIST is the reordered list, which */
+/*   has one initializer for each of FIELDS. The answer is no for  */
+/*   a list that reorderIlistIval() marked as inexact, which can   */
+/*   lack an initializer for a member of another alternative.      */
+/*-----------------------------------------------------------------*/
+static bool
+noOtherAlternative (symbol *fields, initList *ilist, symbol *field)
+{
+  initList *iloop = ilist->init.deep;
+  bool behind = false;
+
+  if (ilist->inexact)
+    return false;
+
+  for ( ; fields && iloop; fields = fields->next)
+    {
+      if (fields == field)
+        behind = true;
+      if (!fieldHasIval (fields))
+        continue;
+      if (iloop->type != INIT_HOLE && fields != field &&
+          (behind ? differentAlternatives (field, fields) : differentAlternatives (fields, field)))
+        return false;
+      iloop = iloop->next;
+    }
+  return true;
+}
+
+/*-----------------------------------------------------------------*/
 /* firstIsAnonStruct - a union is initialized through its first    */
 /*   member. When that is an anonymous struct, there are several   */
 /*   members to initialize after promoteAnonStructs(): the ones    */
@@ -1293,33 +1324,43 @@ printIvalStruct (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oB
      its other members are skipped there as aliases */
   if (SPEC_STRUCT (type)->type == UNION && !firstIsAnonStruct (sflds))
     {
-      int size;
+      unsigned int written = 0;
       /* skip past holes, print value */
       while (iloop && iloop->type == INIT_HOLE)
         {
           iloop = iloop->next;
           sflds = sflds->next;
         }
-      /* a member promoted out of an anonymous struct sits at an offset of
-         its own, so the bytes before it get no initializer */
-      for (size = sflds->offset; size > 0; size--)
+      for (;;)
         {
-          printIvalPad (oBuf);
+          /* a member promoted out of an anonymous struct has an offset of
+             its own, so the bytes before it get no initializer */
+          for ( ; written < (unsigned int) sflds->offset; written++)
+            {
+              printIvalPad (oBuf);
+            }
+          printIval (sym, sflds->type, iloop, oBuf, 1);
+          written += getSize (sflds->type);
+          /* advance past holes to find out if there were excess initializers */
+          do
+            {
+              iloop = iloop ? iloop->next : NULL;
+              do
+                sflds = sflds->next;
+              while (sflds && !fieldHasIval (sflds));
+            }
+          while (iloop && iloop->type == INIT_HOLE);
+          /* An initializer for another member of the anonymous struct that
+             the designators picked is not in excess. */
+          if (!iloop || !sflds || IS_BITFIELD (sflds->type) || (unsigned int) sflds->offset < written ||
+              !noOtherAlternative (SPEC_STRUCT (type)->fields, ilist, sflds))
+            break;
         }
-      printIval (sym, sflds->type, iloop, oBuf, 1);
       /* pad out with zeros if necessary */
-      size = getSize(type) - sflds->offset - getSize(sflds->type);
-      for ( ; size > 0 ; size-- )
+      for ( ; written < getSize (type); written++)
         {
           printIvalPad (oBuf);
         }
-      /* advance past holes to find out if there were excess initializers */
-      do
-        {
-          iloop = iloop ? iloop->next : NULL;
-          sflds = sflds->next;
-        }
-      while (iloop && iloop->type == INIT_HOLE);
     }
   else
     {
@@ -1346,14 +1387,25 @@ printIvalStruct (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oB
               // A designator picked an alternative of this anonymous union
               // other than the first one, so emit the union through that
               // member: the bytes before it get no initializer, and the ones
-              // after it are left to the padding below.
-              for ( ; written < (unsigned int) desig->offset; written++)
-                printIvalPad (oBuf);
-              printIval (sym, desig->type, desigilist, oBuf, 1);
-              written += getSize (desig->type);
+              // after it are left to the padding below. When the alternative
+              // is an anonymous struct, its other members can have an
+              // initializer as well. Each of them is emitted, unless the list
+              // also has an initializer for a member of another alternative.
               for ( ; sflds != after; sflds = sflds->next)
-                if (fieldHasIval (sflds))
-                  iloop = iloop ? iloop->next : NULL;
+                {
+                  if (sflds == desig ||
+                      (iloop && iloop->type != INIT_HOLE && !IS_BITFIELD (sflds->type) &&
+                       (unsigned int) sflds->offset >= written &&
+                       noOtherAlternative (SPEC_STRUCT (type)->fields, ilist, sflds)))
+                    {
+                      for ( ; written < (unsigned int) sflds->offset; written++)
+                        printIvalPad (oBuf);
+                      printIval (sym, sflds->type, iloop, oBuf, 1);
+                      written += getSize (sflds->type);
+                    }
+                  if (fieldHasIval (sflds))
+                    iloop = iloop ? iloop->next : NULL;
+                }
             }
           else if (IS_BITFIELD (sflds->type))
             {
