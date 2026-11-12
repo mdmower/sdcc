@@ -167,6 +167,22 @@ newsym(void)
 	} else
 	if (c == 'D') {
 		ev = eval();
+#if SDCDB
+		/*
+		 * SDCC names the symbols for lines of C code
+		 * C$file$line$level$block.  These names are not unique
+		 * when several modules have code from one file, such as
+		 * a static function in a header.  Create a symbol entry
+		 * for each definition.
+		 */
+		if (tsp->s_type & S_DEF && id[0] == 'C' && id[1] == '$') {
+			tsp = (struct sym *) new (sizeof(struct sym));
+			i = hash(id, zflag);
+			tsp->s_sp = symhash[i];
+			symhash[i] = tsp;
+			tsp->s_id = strsto(id);
+		}
+#endif
                 if (tsp->s_type & S_DEF &&
                     !(tsp->s_addr == ev && tsp->s_axp && tsp->s_axp->a_bap && ((tsp->s_axp->a_bap->a_flag & A3_ABS) == A3_ABS))) {
 				fprintf(stderr,
