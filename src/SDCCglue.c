@@ -851,14 +851,28 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
 {
   value *val;
   unsigned long ulVal = 0;
+  bool strlit;
 
   /* if initList is deep */
   if (ilist && (ilist->type == INIT_DEEP))
     ilist = ilist->init.deep;
 
-  if (!(val = list2val (ilist, false)))
+  val = list2val (ilist, false);
+
+  /* The value of a string literal is flagged as a literal and has the name
+     of the string, but its number is the compiler's own pointer to the
+     characters. An integer gets the address of the string, by name. */
+  strlit = val && IS_LITERAL (val->etype) && val->sym && val->sym->isstrlit;
+  if (strlit && IS_BOOLEAN (type))
     {
-      if (!!(val = initPointer (ilist, type, 0)))
+      /* this address is not a null pointer */
+      val = constBoolVal (true, false);
+      strlit = false;
+    }
+
+  if (!val || strlit)
+    {
+      if (strlit ? IS_INTEGRAL (type) : !!(val = initPointer (ilist, type, 0)))
         {
           int i, size = getSize (type), le = port->little_endian, top = (options.model == MODEL_FLAT24) ? 3 : 2;;
           dbuf_tprintf (oBuf, "\t!db ");
@@ -874,12 +888,28 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
                   dbuf_printf (oBuf, "(%s >> %d)", val->name, i * 8);
                 else
                   dbuf_printf (oBuf, "#0x00");
+              else if (i == top && strlit && GPTRSIZE > FARPTRSIZE)
+                /* generic pointers have a tag, and a cast of one to an integer keeps it */
+                dbuf_printf (oBuf, "#0x%02x", GPTYPE_CODE);
               else
                 dbuf_printf (oBuf, "#0x00");
               if (i == (le ? (size - 1) : 0))
                 dbuf_printf (oBuf, "\n");
               else
                 dbuf_printf (oBuf, ", ");
+            }
+          if (strlit)
+            {
+              /* the string has to be emitted, as in printIvalCharPtr() */
+              char *p;
+
+              if (!!(p = (char *) malloc (strlen (val->sym->name) + 1)))
+                {
+                  strcpy (p, val->sym->name);
+                  addSet (&ccpStr, p);
+                }
+              if (!noInit && !isinSet (statsg->syms, val->sym))
+                addSet (&statsg->syms, val->sym);
             }
           return;
         }
@@ -1002,7 +1032,8 @@ printIvalBitFields (symbol ** sym, initList ** ilist, struct dbuf_s *oBuf)
           /* not an unnamed bit-field structure member */
           value *val = list2val (lilist, true);
 
-          if (val && val->etype && SPEC_SCLS (val->etype) != S_LITERAL)
+          /* the value of a string literal is flagged as a literal, but it is an address */
+          if (val && val->etype && (SPEC_SCLS (val->etype) != S_LITERAL || val->sym && val->sym->isstrlit))
             {
               werrorfl (lilist->filename, lilist->lineno, E_CONST_EXPECTED);
               val = constCharVal (0);
