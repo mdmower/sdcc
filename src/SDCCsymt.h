@@ -348,6 +348,9 @@ typedef struct symbol
   unsigned anonopen:8;              /* number of anonymous structs/unions this is the first */
   unsigned anonclose:8;             /* and the last member of that takes an initializer (set
                                        in promoteAnonStructs, read by unbraceAnonIlist) */
+  unsigned anonaltstart:1;          /* the first member that takes an initializer of an
+                                       alternative of a union other than its first one (set in
+                                       promoteAnonStructs, read by differentAlternatives) */
 
   /* following flags are used by the backend
      for code generation and can be changed
@@ -795,6 +798,7 @@ sym_link *typeFromStr (const char *);
 STORAGE_CLASS sclsFromPtr (sym_link * ptr);
 sym_link *newEnumType (symbol *enumlist, sym_link *userRequestedType);
 void promoteAnonStructs (structdef *);
+bool differentAlternatives (const symbol *, const symbol *);
 sym_link *argumentTypeAfterDecay (sym_link *, value **);
 void checkPtrTargetQualifiers (sym_link *, sym_link *);
 void checkPtrTargetQualifiersAfterDecay (sym_link *, sym_link *);

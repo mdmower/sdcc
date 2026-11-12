@@ -705,6 +705,22 @@ unbraceAnonInit (sym_link * type, initList * iloop, int idx, int last, int level
       dst->next = NULL;
       *tail = dst;
       tail = &dst->next;
+      /* An initializer without a designator is for the next member that is
+         not in another alternative of a union than this one (C11 6.7.9p17).
+         nextInitSlot() skips that member after a designator for a member of
+         a later alternative that has more members. The initializer is then
+         lost or assigned to a member after the union. The mark tells
+         printIvalStruct() and createIvalStruct() that the list can lack an
+         initializer for a member of the alternative. */
+      if (skipaliases && iloop->next && !iloop->next->designation)
+        {
+          symbol *from = findStructFieldAt (type, idx), *to;
+
+          for (to = from ? from->next : NULL; to; to = to->next)
+            if (!(IS_BITFIELD (to->type) && SPEC_BUNNAMED (to->etype)) && !differentAlternatives (from, to))
+              break;
+          dst->inexact = to && to->anonunionalias;
+        }
       idx = skipaliases ? nextInitSlot (type, idx) : idx + 1;
     }
 
@@ -755,6 +771,7 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
   initList *iloop, *nlist, **nlistArray, **partArray = NULL;
   symbol *sflds;
   int size=0, idx;
+  bool inexact = false;
 
   if (!IS_AGGREGATE (type))
     /* uninteresting: no designated initializers */
@@ -814,6 +831,8 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
   for (idx = 0 ; iloop ; iloop = iloop->next,
                          idx = skipaliases ? nextInitSlot (type, idx) : idx + 1)
     {
+      inexact |= iloop->inexact;
+
       if (iloop->designation)
         {
           assert (iloop->type != INIT_HOLE);
@@ -929,6 +948,7 @@ static initList *reorderIlistFull (sym_link * type, initList * ilist, bool skipa
   nlist->filename = ilist->filename;
   nlist->lineno = ilist->lineno;
   nlist->designation = ilist->designation;
+  nlist->inexact = inexact;
   nlist->next = ilist->next;
   return nlist;
 }
