@@ -806,8 +806,13 @@ minit(void)
 
 	/*
 	 * Address Space
+	 *
+	 * Expressions are evaluated with 32 bits, because the
+	 * address of an __sfr32 is a list of four 8-bit addresses.
+	 * The addresses in the T lines have 3 bytes.
 	 */
-	exprmasks(3);
+	exprmasks(4);
+	a_bytes = 3;
 
 	/*
 	 * First time only:
