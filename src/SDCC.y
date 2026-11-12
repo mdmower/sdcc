@@ -2367,15 +2367,19 @@ else_statement
 
 selection_header
    : expression               { $$ = newNode(NULLOP, NULL, $1); }
-   | declaration expression   {
+   | declaration              {
                                 if (!options.std_c2y)
                                   werror(E_SELECTION_DECLARATION_C2Y);
 
                                 if ($1 && IS_TYPEDEF($1->etype))
                                   allocVariables($1);
                                 ignoreTypedefType = 0;
+                                /* Add the declaration before the expression is parsed. The actions */
+                                /* for typeof and &* look up their operand during the parse. */
                                 addSymChain(&$1);
-                                $$ = newNode(NULLOP, newAst_VALUE(symbolVal($1)), $2);
+                              }
+     expression               {
+                                $$ = newNode(NULLOP, newAst_VALUE(symbolVal($1)), $3);
                               }
    | simple_declaration       {
                                 if (!options.std_c2y)
@@ -2493,7 +2497,7 @@ iteration_statement
                           NestLevel -= LEVEL_UNIT;
                           currBlockno = STACK_POP(blockNum);
                         }
-   | for '(' declaration expression_opt ';' expression_opt ')'
+   | for '(' declaration
                         {
                           if (!options.std_c99)
                             werror (E_FOR_INITAL_DECLARATION_C99);
@@ -2501,9 +2505,11 @@ iteration_statement
                           if ( $3 && IS_TYPEDEF($3->etype))
                             allocVariables ($3);
                           ignoreTypedefType = 0;
+                          /* Add the declaration before the two expressions are parsed. The */
+                          /* actions for typeof and &* look up their operand during the parse. */
                           addSymChain(&$3);
                         }
-     secondary_block
+     expression_opt ';' expression_opt ')' secondary_block
                         {
 
                           noLineno++;
@@ -2514,8 +2520,8 @@ iteration_statement
                           AST_FOR($$,falseLabel) = STACK_POP(breakStack);
                           AST_FOR($$,condLabel)  = STACK_POP(forStack);
                           AST_FOR($$,initExpr)   = 0;
-                          AST_FOR($$,condExpr)   = $4;
-                          AST_FOR($$,loopExpr)   = $6;
+                          AST_FOR($$,condExpr)   = $5;
+                          AST_FOR($$,loopExpr)   = $7;
 
                           /* This continue label is not at the correct location, */
                           /* but we need to create it now for proper binding. The */
