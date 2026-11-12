@@ -1594,7 +1594,7 @@ addSymChain (symbol **symHead)
         {
           symbol *csym;
           bool declaration_with_no_linkage_visible =
-            (csym = findSymWithLevel (SymbolTab, sym)) && csym->level && !IS_STATIC (csym->etype) && !IS_EXTERN (csym->type);
+            (csym = findSymWithLevel (SymbolTab, sym)) && csym->level && !IS_STATIC (csym->etype) && !IS_EXTERN (csym->etype);
 
           long saveLevel = sym->level;
           sym->level = 0;
@@ -1629,8 +1629,9 @@ addSymChain (symbol **symHead)
         {
           /* if not formal parameter and not in file scope
              then show symbol redefined error
-             else check if symbols have compatible types */
-          if (!sym->_isparm && sym->level > 0)
+             else check if symbols have compatible types.
+             Identifiers that have linkage can be declared in a block more than once. */
+          if (!sym->_isparm && sym->level > 0 && !(IS_EXTERN (csym->etype) && IS_EXTERN (sym->etype) && !sym->ival))
             error = 1;
           else
             {
@@ -1714,6 +1715,17 @@ addSymChain (symbol **symHead)
                 fprintf (stderr, " at 0x%x", SPEC_ADDR (sym->etype));
               fprintf (stderr, "'\n");
 #endif
+              continue;
+            }
+
+          /* In a block, the symbol of the first declaration stays in the symbol table with
+             the composite type. Take the symbol of this declaration out of the chain. */
+          if (!sym->_isparm && sym->level > 0)
+            {
+              symPtrPtr = symHead;
+              while (*symPtrPtr != sym)
+                symPtrPtr = &(*symPtrPtr)->next;
+              *symPtrPtr = sym->next;
               continue;
             }
 
