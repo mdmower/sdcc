@@ -2110,6 +2110,7 @@ promoteAnonStructs (structdef * sdef)
               continue;
             }
           field->anonunionalias = 1;
+          field->anonaltstart = !isfirst;
         }
     }
 
@@ -2174,6 +2175,7 @@ promoteAnonStructs (structdef * sdef)
             {
               firstival->anonopen++;
               lastival->anonclose++;
+              firstival->anonaltstart |= field->anonaltstart;
             }
           subfield->next = nextfield;
           tofield = &subfield->next;
@@ -2185,6 +2187,44 @@ promoteAnonStructs (structdef * sdef)
           tofield = &field->next;
         }
     }
+}
+
+/*-------------------------------------------------------------------*/
+/* differentAlternatives - is the member B, which is behind the      */
+/*   member A in the list that promoteAnonStructs() made, in another */
+/*   alternative of a union than A?  Then an initializer can go to   */
+/*   only one of them.                                               */
+/*-------------------------------------------------------------------*/
+bool
+differentAlternatives (const symbol *a, const symbol *b)
+{
+  const symbol *f;
+  int depth = 0;                /* anonymous structs and unions entered behind A minus the ones exited */
+  int mindepth = 0;             /* its lowest value so far: the ones open at this depth have A in them */
+  int altdepth = 0;             /* its value where the alternative starts */
+  bool inalt = false;           /* in an alternative, other than the first, of a union with A in it */
+
+  for (f = a; f; f = f->next)
+    {
+      if (f != a)
+        {
+          if (!inalt && f->anonaltstart && depth == mindepth)
+            {
+              inalt = true;
+              altdepth = depth;
+            }
+          depth += f->anonopen;
+          if (f == b)
+            return inalt;
+        }
+      depth -= f->anonclose;
+      if (depth < mindepth)
+        mindepth = depth;
+      if (depth <= altdepth)
+        inalt = false;
+    }
+
+  return false;
 }
 
 /*------------------------------------------------------------------*/

@@ -1280,6 +1280,56 @@ findStructField (symbol *fields, symbol *target)
 }
 
 /*-----------------------------------------------------------------*/
+/* sameAlternative - ILOOP is the initializer list of a union with */
+/*   the members FIELDS. Can createIvalStruct() apply each of the  */
+/*   designated initializers that the list starts with, and give   */
+/*   the initializers without a designator to the members behind   */
+/*   the last designated one?  Not when two designated members are */
+/*   in different alternatives of a union, when a designator       */
+/*   follows an initializer without one, or when the list is       */
+/*   inexact (see unbraceAnonInit()). Not either when initializers */
+/*   without a designator follow and a designated member is behind */
+/*   the last designated one. One of them can then be for a member */
+/*   that has an initializer, or for a member of another           */
+/*   alternative than a designated one.                            */
+/*-----------------------------------------------------------------*/
+static bool
+sameAlternative (symbol *fields, initList *iloop)
+{
+  initList *jloop, *rest;
+
+  /* rest is the first initializer without a designator */
+  for (rest = iloop; rest && rest->designation && !rest->inexact; rest = rest->next)
+    ;
+  for (jloop = rest; jloop; jloop = jloop->next)
+    if (jloop->designation || jloop->inexact)
+      return false;
+
+  for (; iloop != rest; iloop = iloop->next)
+    for (jloop = iloop->next; jloop != rest; jloop = jloop->next)
+      {
+        symbol *a = NULL, *b = NULL;
+
+        if (iloop->designation->type == DESIGNATOR_STRUCT && jloop->designation->type == DESIGNATOR_STRUCT)
+          {
+            a = findStructField (fields, iloop->designation->designator.tag);
+            b = findStructField (fields, jloop->designation->designator.tag);
+          }
+        if (!a || !b || differentAlternatives (a, b) || differentAlternatives (b, a))
+          return false;
+        /* b is the last designated member */
+        if (rest && jloop->next == rest)
+          {
+            for (; a && a != b; a = a->next)
+              ;
+            if (!a)
+              return false;
+          }
+      }
+  return true;
+}
+
+/*-----------------------------------------------------------------*/
 /* createIvalPart - generates the initial value for the part DESIG */
 /*   names of SYM, which has its initial value otherwise. Nothing  */
 /*   but that part changes (C11 6.7.9p19).                         */
@@ -1362,6 +1412,8 @@ designatedIlist (sym_link *type, initList *ilist, initList **parts)
       if (iloop->type != INIT_HOLE)
         {
           iloop->designation = newDesignation (DESIGNATOR_STRUCT, sflds);
+          /* for sameAlternative(), which gets these and not the list */
+          iloop->inexact = ilist->inexact;
           *end = iloop;
           end = &iloop->next;
         }
@@ -1397,9 +1449,12 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
      follows the designated member (C11 6.7.9p17), not the first member of
      the struct, so remember where the positional walk below resumes. */
   symbol *resume = NULL;
-  /* a union takes a single initializer, so a designator is the whole list
-     for it and only the zero fill below is left to do */
-  bool uniondesig = false;
+  /* A union takes the initializers for one alternative, which the first
+     designator picks. The designators that follow it are for other members
+     of an anonymous struct. When sameAlternative() finds that they cannot
+     all be applied, only the first designator counts. */
+  symbol *uniondesig = NULL;
+  bool unionsingle = SPEC_STRUCT (type)->type == UNION && !sameAlternative (SPEC_STRUCT (type)->fields, iloop);
 
   for (;iloop && iloop->designation; iloop = iloop->next)
     {
@@ -1437,8 +1492,10 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
 
       if (SPEC_STRUCT (type)->type == UNION)
         {
-          uniondesig = true;
-          break;
+          if (!uniondesig)
+            uniondesig = sflds;
+          if (unionsingle)
+            break;
         }
     }
 
@@ -1517,7 +1574,10 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
         }
     }
 
-  if (uniondesig)
+  /* The other members of a union's first alternative take the initializers
+     without a designator below, or are zeroed. For another alternative,
+     the zero fill above completes the initialization. */
+  if (uniondesig && (unionsingle || uniondesig->anonunionalias))
     goto release;
 
   // Handle the rest and fill in the gaps.
