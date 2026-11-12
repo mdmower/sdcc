@@ -3082,6 +3082,11 @@ geniCodeAddressOf (operand *op)
 /*  return op; */
 /*     } */
 
+  /* geniCodeArray gives an element of function pointer type the type
+     of its array. The address is a pointer to the element. */
+  if (IS_ITEMP (op) && op->aggr2ptr && IS_ARRAY (optype))
+    optype = optype->next;
+
   p = newLink (DECLARATOR);
 
   /* set the pointer depending on the storage class */
