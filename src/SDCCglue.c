@@ -1849,8 +1849,10 @@ printIvalPtr (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oBuf)
   if (!(val = initPointer (ilist, type, 1)))
     return;
 
-  /* if character pointer */
-  if (IS_CHAR (type->next) || IS_INT (type->next) && IS_UNSIGNED (type->next))
+  /* if character pointer, or if the value is a string literal, which is
+     flagged as a literal and has the name of the string for its address */
+  if (IS_CHAR (type->next) || IS_INT (type->next) && IS_UNSIGNED (type->next) ||
+      IS_LITERAL (val->etype) && val->sym && val->sym->isstrlit)
     if (printIvalCharPtr (sym, type, val, oBuf))
       return;
 
