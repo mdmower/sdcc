@@ -2707,7 +2707,9 @@ function_body
 file
    : /* empty */
      {
-       werror(W_EMPTY_TRANSLATION_UNIT);
+       /* The parser also reduces by this rule when the first token cannot begin a translation unit, and it reports the syntax error afterwards. */
+       if (yychar == YYEOF)
+         werror(W_EMPTY_TRANSLATION_UNIT);
      }
    | translation_unit
    ;
