@@ -4465,9 +4465,25 @@ processFunc (symbol *func, sym_link *funcType)
               SPEC_ARGREG (val->sym->etype) = argreg;
             }
         }
-      else if (IFFUNC_ISREENT (funcType))
+      else
         {
-          FUNC_HASSTACKPARM (funcType) = 1;
+          /* remove the mark of an earlier call. This function is */
+          /* also called before the return type is in the type, */
+          /* for example when function attributes are added, and */
+          /* the port's reg_parm can test the return type */
+          if (IS_REGPARM (val->etype))
+            {
+              SPEC_REGPARM (val->etype) = 0;
+              SPEC_ARGREG (val->etype) = 0;
+            }
+          if (val->sym && IS_REGPARM (val->sym->etype))
+            {
+              SPEC_REGPARM (val->sym->etype) = 0;
+              SPEC_ARGREG (val->sym->etype) = 0;
+            }
+
+          if (IFFUNC_ISREENT (funcType))
+            FUNC_HASSTACKPARM (funcType) = 1;
         }
 
       /* if this is an internal generated function call */
