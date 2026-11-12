@@ -4504,9 +4504,19 @@ genPcall (iCode * ic)
   // Adjust stack pointer for the hidden pointer parameter.
   if (bigreturn)
     {
-      emitpop (0);
-      emitpop (0);
-      emitpop (0);
+      // pushbigreturn () puts it on the external stack only when the result object is on that stack.
+      if (options.useXstack && OP_SYMBOL (IC_RESULT (ic))->onStack)
+        {
+          emitcode ("dec", "%s", spname);
+          emitcode ("dec", "%s", spname);
+          emitcode ("dec", "%s", spname);
+        }
+      else
+        {
+          emitpop (0);
+          emitpop (0);
+          emitpop (0);
+        }
     }
 
   if (swapBanks)
