@@ -26,7 +26,6 @@ void check_cast(B actual, B expected) {
 
 void
 testBug(void) {
-#if 0 // Bug not yet fixed
     A a = { .value = 15, .value2 = 5 };
     B b = {.value = 15, .value2 = 5 };
     check_cast(*(B*)&a, b); // memcmp_result != 0 (bug)
@@ -35,6 +34,5 @@ testBug(void) {
     B var = *(B*)&a;
     check_cast(var, b); // memcmp_result == 0
     ASSERT (!memcmp_result);
-#endif
 }
 
