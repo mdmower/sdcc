@@ -1,0 +1,242 @@
+/* bug-4131.c
+   A conditional expression with operands of struct or union type was
+   evaluated to one address, and the kind of that address was derived from the
+   type of the expression instead of from the objects. Returning such an
+   expression gave an internal error in the code generator (z80, stm8). For
+   mcs51 the value was read from a wrong address space when an operand was a
+   call, or when the objects of the two operands were in different address
+   spaces.
+
+   The test has three parts, because the mcs51 small model does not have the
+   memory for all of it.
+
+   part: return, assign, use
+ */
+
+#include <testfwk.h>
+
+#define PART_{part}
+
+#if !defined(__SDCC_hc08) && !defined(__SDCC_s08) && !defined(SDCC_MOS) // struct return not yet supported
+struct s
+{
+  unsigned char a;
+  int b;
+};
+
+union u
+{
+  unsigned char a;
+  long b;
+};
+
+struct s ga = {0x11, 0x1111};
+struct s gb = {0x22, 0x2222};
+const struct s gk = {0x33, 0x3333};
+struct s r;
+unsigned char calls;
+
+struct s
+fa (void)
+{
+  calls += 0x01;
+  return ga;
+}
+
+struct s
+fb (void)
+{
+  calls += 0x10;
+  return gb;
+}
+
+#ifdef PART_return
+/* the reported case */
+struct s
+choose (unsigned char c, struct s a, struct s b)
+{
+  return c ? a : b;
+}
+
+union u
+chooseUnion (unsigned char c, union u a, union u b)
+{
+  return c ? a : b;
+}
+
+struct s
+chooseCall (unsigned char c)
+{
+  return c ? fa () : fb ();
+}
+#endif
+
+#ifdef PART_assign
+void
+assignCalls (unsigned char c)
+{
+  r = c ? fa () : fb ();
+}
+
+void
+assignCallVar (unsigned char c)
+{
+  r = c ? fa () : gb;
+}
+
+void
+assignVarCall (unsigned char c)
+{
+  r = c ? ga : fb ();
+}
+
+void
+initCalls (unsigned char c)
+{
+  struct s l = c ? fa () : fb ();
+
+  r = l;
+}
+
+/* gk is in code memory for mcs51, and l is on the stack with --stack-auto */
+void
+assignSpaces (unsigned char c, unsigned char d)
+{
+  struct s l;
+
+  l.a = 0x66;
+  l.b = 0x6666;
+  if (d)
+    r = c ? gk : l;
+  else
+    r = c ? l : ga;
+}
+#endif
+
+#ifdef PART_use
+int
+getB (struct s v)
+{
+  return v.b;
+}
+
+int
+argument (unsigned char c)
+{
+  return getB (c ? fa () : gk);
+}
+
+int
+member (unsigned char c)
+{
+  return (c ? gk : fb ()).b;
+}
+
+void
+nested (unsigned char c, unsigned char d)
+{
+  r = c ? (d ? fa () : fb ()) : gk;
+}
+#endif
+#endif
+
+void
+testBug (void)
+{
+#if !defined(__SDCC_hc08) && !defined(__SDCC_s08) && !defined(SDCC_MOS) // struct return not yet supported
+#ifdef PART_return
+  union u ux, uy, ur;
+
+  r = choose (1, ga, gb);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+  r = choose (0, ga, gb);
+  ASSERT (r.a == 0x22);
+  ASSERT (r.b == 0x2222);
+
+  ux.b = 0x01020304;
+  uy.b = 0x05060708;
+  ur = chooseUnion (1, ux, uy);
+  ASSERT (ur.b == 0x01020304);
+  ur = chooseUnion (0, ux, uy);
+  ASSERT (ur.b == 0x05060708);
+
+  calls = 0;
+  r = chooseCall (1);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+  ASSERT (calls == 0x01);
+  r = chooseCall (0);
+  ASSERT (r.a == 0x22);
+  ASSERT (r.b == 0x2222);
+  ASSERT (calls == 0x11);
+#endif
+
+#ifdef PART_assign
+  calls = 0;
+  assignCalls (1);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+  ASSERT (calls == 0x01);
+  assignCalls (0);
+  ASSERT (r.a == 0x22);
+  ASSERT (r.b == 0x2222);
+  ASSERT (calls == 0x11);
+
+  assignCallVar (1);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+  assignCallVar (0);
+  ASSERT (r.a == 0x22);
+  ASSERT (r.b == 0x2222);
+  ASSERT (calls == 0x12);
+
+  assignVarCall (1);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+  assignVarCall (0);
+  ASSERT (r.a == 0x22);
+  ASSERT (r.b == 0x2222);
+  ASSERT (calls == 0x22);
+
+  initCalls (1);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+  initCalls (0);
+  ASSERT (r.a == 0x22);
+  ASSERT (r.b == 0x2222);
+  ASSERT (calls == 0x33);
+
+  assignSpaces (1, 1);
+  ASSERT (r.a == 0x33);
+  ASSERT (r.b == 0x3333);
+  assignSpaces (0, 1);
+  ASSERT (r.a == 0x66);
+  ASSERT (r.b == 0x6666);
+  assignSpaces (1, 0);
+  ASSERT (r.a == 0x66);
+  ASSERT (r.b == 0x6666);
+  assignSpaces (0, 0);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+#endif
+
+#ifdef PART_use
+  ASSERT (argument (1) == 0x1111);
+  ASSERT (argument (0) == 0x3333);
+
+  ASSERT (member (1) == 0x3333);
+  ASSERT (member (0) == 0x2222);
+
+  nested (1, 1);
+  ASSERT (r.a == 0x11);
+  ASSERT (r.b == 0x1111);
+  nested (1, 0);
+  ASSERT (r.a == 0x22);
+  ASSERT (r.b == 0x2222);
+  nested (0, 1);
+  ASSERT (r.a == 0x33);
+  ASSERT (r.b == 0x3333);
+#endif
+#endif
+}

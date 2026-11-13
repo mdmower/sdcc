@@ -56,6 +56,8 @@ static operand *geniCodeArray (operand *, operand *, int, bool noderef);
 static operand *geniCodeArray2Ptr (operand *);
 operand *geniCodeRValue (operand *, bool);
 operand *geniCodeDerefPtr (operand *, int);
+static void addLvaluereq (int lvl);
+static void delLvaluereq (void);
 static int isLvaluereq (int lvl);
 static operand *geniCodeCast (sym_link *, operand *, bool);
 
@@ -3497,6 +3499,28 @@ geniCodeBinary (operand * left, operand * right, int oper, sym_link * resType)
 }
 
 /*-----------------------------------------------------------------*/
+/* geniCodeStructAddress - the address of the object that holds    */
+/*                         the value of a struct or union          */
+/*                         expression, as a generic pointer        */
+/*-----------------------------------------------------------------*/
+static operand *
+geniCodeStructAddress (ast *tree, int lvl)
+{
+  operand *op;
+  sym_link *type;
+
+  /* evaluate the expression as the operand of '&', see ast2iCode() */
+  addLvaluereq (lvl);
+  op = operandFromAst (tree, lvl, true);
+  delLvaluereq ();
+  op = geniCodeAddressOf (op);
+
+  type = copyLinkChain (operandType (op));
+  DCL_TYPE (type) = GPOINTER;
+  return geniCodeCast (type, op, true);
+}
+
+/*-----------------------------------------------------------------*/
 /* geniCodeConditional - geniCode for '?' ':' operation            */
 /*-----------------------------------------------------------------*/
 operand *
@@ -3510,11 +3534,19 @@ geniCodeConditional (ast * tree, int lvl)
   operand *cond = ast2iCode (tree->left, lvl + 1);
   operand *result = newiTempOperand (tree->ftype, 0);
   operand *opTrue, *opFalse;
+  bool isStruct = IS_STRUCT (tree->ftype);
+
+  /* The value of an operand of struct or union type is the address of an object, and the kind
+     of that address follows from the output class in the operand's type. The objects of the
+     second and the third operand can be in different address spaces, and neither of them
+     needs to be in the address space of tree->ftype, so the result is a generic pointer. */
+  if (isStruct)
+    SPEC_OCLS (getSpec (operandType (result))) = generic;
 
   ic = newiCodeCondition (geniCodeRValue (cond, false), NULL, falseLabel);
   ADDTOCHAIN (ic);
 
-  opTrue = ast2iCode (astTrue, lvl + 1);
+  opTrue = isStruct ? geniCodeStructAddress (astTrue, lvl + 1) : ast2iCode (astTrue, lvl + 1);
 
   /* move the value to the new operand */
   geniCodeAssign (result, geniCodeRValue (opTrue, false), 0, 0);
@@ -3525,7 +3557,7 @@ geniCodeConditional (ast * tree, int lvl)
   /* now for the right side */
   geniCodeLabel (falseLabel);
 
-  opFalse = ast2iCode (astFalse, lvl + 1);
+  opFalse = isStruct ? geniCodeStructAddress (astFalse, lvl + 1) : ast2iCode (astFalse, lvl + 1);
   geniCodeAssign (result, geniCodeRValue (opFalse, false), 0, 0);
 
   /* create the exit label */
@@ -4724,10 +4756,8 @@ ast2iCode (ast * tree, int lvl)
       return NULL;
     }
 
-  /* A struct or union value that is not a variable needs an object to be returned from.
-     A conditional expression is left as it is: for these types its evaluation is wrong
-     already (bugs #4131, #4163), which the code generators should refuse rather than hide. */
-  if (tree->opval.op == RETURN && IS_AST_OP (tree->right) && tree->right->opval.op != '?' && IS_STRUCT (tree->right->ftype))
+  /* A struct or union value that is not a variable needs an object to be returned from. */
+  if (tree->opval.op == RETURN && IS_AST_OP (tree->right) && IS_STRUCT (tree->right->ftype))
     {
       geniCodeReturnStruct (tree->right, lvl);
       return NULL;
