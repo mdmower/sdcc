@@ -5009,6 +5009,40 @@ ast2iCode (ast * tree, int lvl)
           right = geniCodeRValue (right, true);
         else
           right = geniCodeRValue (right, false);
+
+        /* The value of an assignment has the type of the left operand.
+           checkTypes() does not cast a right operand whose type differs
+           from that type in signedness only, so the value is a cast of
+           the right operand. geniCodeAssign() returns the left operand
+           for a bit-field. */
+        if (!IS_BITVAR (tree->ftype) && compareType (tree->ftype, operandType (right), false) == -2)
+          {
+            sym_link *type = copyLinkChain (tree->ftype);
+
+            /* iTemps are not volatile, see checkTypes() */
+            if (IS_DECL (type))
+              {
+                DCL_PTR_VOLATILE (type) = 0;
+                DCL_PTR_ATOMIC (type) = 0;
+              }
+            else
+              {
+                SPEC_VOLATILE (type) = 0;
+                SPEC_ATOMIC (type) = 0;
+              }
+
+            /* A volatile right operand is read once, so the cast
+               precedes the assignment. Any other cast follows it, and
+               the iCode of the assignment itself is the same whether
+               the value is used or not. */
+            if (isOperandVolatile (right, false))
+              right = geniCodeCast (type, right, true);
+            else
+              {
+                geniCodeAssign (left, right, 0, 1);
+                return geniCodeCast (type, right, true);
+              }
+          }
         return geniCodeAssign (left, right, 0, 1);
       }
     case MUL_ASSIGN:
