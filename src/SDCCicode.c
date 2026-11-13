@@ -3185,13 +3185,18 @@ geniCodeDerefPtr (operand *op, int lvl)
       return op;
     }
 
-  if (IS_TRUE_SYMOP (op) || IS_OP_LITERAL (op))
+  /* The value of a struct or union is passed on as the address of its object, as the value
+     of a variable or of a member is. The pointer is that address and is not read through. */
+  bool structval = IS_STRUCT (optype->next) && !isLvaluereq (lvl);
+
+  if (IS_TRUE_SYMOP (op) || IS_OP_LITERAL (op) || structval)
     {
       // For a true symop, we need the iTemp copy, since setOperandType below will fail otherwise.
       /* To avoid problems converting a dereferenced literal pointer */
       /* back and forth between lvalue and rvalue formats, replace   */
       /* the literal pointer with an iTemp and assign the literal    */
       /* value to the iTemp. */
+      // The value of a struct or union needs the copy, since its iTemp gets the type of the object below.
       iCode *ic;
       operand *iop = newiTempOperand (optype, 0);
       SPEC_SCLS (OP_SYM_ETYPE (iop)) = S_AUTO;   /* remove S_LITERAL */
@@ -3225,7 +3230,7 @@ geniCodeDerefPtr (operand *op, int lvl)
   op->isaddr = (IS_PTR (rtype) ||
                 IS_STRUCT (rtype) || IS_INT (rtype) || IS_BITINT (rtype) || IS_BOOL (rtype) || IS_CHAR (rtype) || IS_FLOAT (rtype) || IS_FIXED (rtype));
 
-  if (!isLvaluereq (lvl))
+  if (!isLvaluereq (lvl) && !structval)
     op = geniCodeRValue (op, true);
 
   if (IS_DECL (rtype))
@@ -3239,6 +3244,13 @@ geniCodeDerefPtr (operand *op, int lvl)
       SPEC_VOLATILE (rtype) = 0;
     }
   setOperandType (op, rtype);
+
+  if (structval)
+    {
+      /* The user of the value takes the kind of pointer from the output class. */
+      op->isaddr = 0;
+      setOClass (optype, getSpec (operandType (op)));
+    }
 
   return op;
 }
@@ -3678,9 +3690,6 @@ geniCodeSEParms (ast *parms, int lvl, sym_link *ftype)
   if (IS_CAST_OP (parms) && IS_PTR (parms->ftype) && IS_ADDRESS_OF_OP (parms->right))
     parms->right->left->lvalue = 1;
 
-  if (parms->type == EX_OP && parms->opval.op == '[' && IS_STRUCT (parms->ftype)) // Do not dereference pointer to struct.
-    parms->opval.op = '+';
-
   parms->opval.oprnd = geniCodeRValue (ast2iCode (parms, lvl + 1), false);
   if (IFFUNC_ISDYNAMICC (ftype)) // Dynamic C passes first param both in register and on stack. Need an iTemp to avoid duplication (and double read of volatile, etc).
     {
@@ -3764,6 +3773,8 @@ send:
  
               // Keep this one in mind in so we can move it later.
               operand *dstop = geniCodeCast (FUNC_ARGS(builtin_memcpy->type)->type, operandFromValue (argVals, true), false);
+              // The source can be a pointer of another kind than the parameter of memcpy.
+              pval = geniCodeCast (FUNC_ARGS(builtin_memcpy->type)->next->type, pval, false);
               castic_end = iCodeChainEnd;
               if (IS_REGPARM (FUNC_ARGS (builtin_memcpy->type)->etype))
                 {
