@@ -1753,6 +1753,13 @@ addSymChain (symbol **symHead)
           if (csym->ival && !sym->ival)
             sym->ival = csym->ival;
           sym->generated |= csym->generated;
+          /* sym replaces csym in the symbol table. emitRegularMap () makes functions
+             public and checkFunction () rejects a second body where FUNC_HASBODY is set,
+             so sym needs the flag when csym is a definition. Inline definitions for which
+             code was not generated are excluded, because the module would declare the
+             function global and not define it. */
+          if (csym->generated && IFFUNC_HASBODY (csym->type))
+            FUNC_HASBODY (sym->type) = true;
 
           if (IS_EXTERN (sym->etype) && IFFUNC_ISINLINE (csym->type))
             {

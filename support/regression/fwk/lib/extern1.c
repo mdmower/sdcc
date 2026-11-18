@@ -26,3 +26,14 @@ has_undefined_symbol2(void) {
   /* empty */
 }
 
+/* needed by tests/bug-3357.c
+   the declaration has to follow the definition,
+   and this file must not call the function */
+int
+bug_3357 (int c)
+{
+  return c + 1;
+}
+
+int bug_3357 (int c);
+
