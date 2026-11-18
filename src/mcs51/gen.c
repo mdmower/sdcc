@@ -4095,6 +4095,8 @@ genCall (iCode * ic)
   bool swapBanks = FALSE;
   bool accuse = FALSE;
   bool accPushed = FALSE;
+  bool buse = false;
+  bool bPushed = false;
   bool resultInF0 = FALSE;
   bool assignResultGenerated = FALSE;
 
@@ -4225,7 +4227,8 @@ genCall (iCode * ic)
       _G.accInUse--;
 
       assignResultValue (IC_RESULT (ic), IC_LEFT (ic));
-      accuse = (IC_RESULT (ic)->aop->regs[A_IDX] > 0);
+      accuse = (IC_RESULT (ic)->aop->regs[A_IDX] >= 0);
+      buse = (IC_RESULT (ic)->aop->regs[B_IDX] >= 0);
       assignResultGenerated = true;
 
       freeAsmop (IC_RESULT (ic), NULL, ic, true);
@@ -4284,6 +4287,12 @@ genCall (iCode * ic)
           emitpush ("acc");
           accPushed = TRUE;
         }
+      if (buse && options.useXstack && optimize.codeSize)
+        {
+          /* sdcc_xpop_regs takes a part of its register mask in b */
+          emitpush ("b");
+          bPushed = true;
+        }
       unsaveRegisters (ic);
     }
 
@@ -4297,6 +4306,8 @@ genCall (iCode * ic)
       freeAsmop (IC_RESULT (ic), NULL, ic, TRUE);
     }
 
+  if (bPushed)
+    emitpop ("b");
   if (accPushed)
     emitpop ("acc");
 }
