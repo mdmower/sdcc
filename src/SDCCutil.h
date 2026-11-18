@@ -168,6 +168,7 @@ unsigned long escapeValueInRange (escapeValue escape, unsigned long limit);
 /* A zero limit preserves the unrestricted conversion used outside literals. */
 const char *copyStrWithEscapeLimit (const char *src, size_t *size, unsigned long limit);
 const char *copyStr (const char *src, size_t *size);
+const uint32_t *copyStr32 (const char *src, size_t *size, unsigned long limit);
 
 const uint32_t *utf_32_from_utf_8 (size_t *utf_32_len, const char *utf_8, size_t utf_8_len);
 const uint16_t *utf_16_from_utf_32 (size_t *utf_16_len, const uint32_t *utf_32, size_t utf_32_len);

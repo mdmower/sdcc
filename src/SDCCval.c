@@ -2014,14 +2014,10 @@ strVal (const char *s)
     }
   else
     {
-      // Convert input string (mixed UTF-8 and UTF-32) to UTF-8 first (handling all escape sequences, etc).
-      utf_8 = copyStrWithEscapeLimit (s + 1, &utf_8_size, escapeLimit);
-
       size_t utf_32_size;
-      // Convert to UTF-32 next, since converting UTF-32 to UTF-16 is easier than UTF-8 to UTF-16.
-      const uint32_t *utf_32 = utf_32_from_utf_8 (&utf_32_size, utf_8, utf_8_size);
-
-      dbuf_free (utf_8);
+      // Convert input string (mixed UTF-8 and UTF-32) to UTF-32 first (handling all escape sequences, etc),
+      // since converting UTF-32 to UTF-16 is easier than UTF-8 to UTF-16.
+      const uint32_t *utf_32 = copyStr32 (s + 1, &utf_32_size, escapeLimit);
 
       if (s[0] == 'U' || s[0] == 'L') // UTF-32 string literal
         {

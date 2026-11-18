@@ -1149,7 +1149,7 @@ const uint32_t *utf_32_from_utf_8 (size_t *utf_32_len, const char *utf_8, size_t
       utf_8_len--;
       seqlen--;
 
-      for(; seqlen; seqlen--)
+      for(; seqlen && utf_8_len; seqlen--)
         {
           codepoint <<= 6;
           codepoint |= (*utf_8 & 0x3f);
@@ -1179,7 +1179,7 @@ const uint16_t *utf_16_from_utf_32 (size_t *utf_16_len, const uint32_t *utf_32, 
 
       codepoint = *utf_32;
 
-      if (codepoint < 0xd7ff || codepoint >= 0xe000 && codepoint <= 0xffff) // Code in basic multilingual plane.
+      if (codepoint <= 0xffff) // Code in basic multilingual plane, or code unit from a numeric escape sequence.
         {
           utf_16[(*utf_16_len)++] = codepoint;
           continue;
@@ -1322,6 +1322,64 @@ const char *
 copyStr (const char *src, size_t *size)
 {
   return copyStrWithEscapeLimit (src, size, 0);
+}
+
+/*!
+  /fn const uint32_t *copyStr32 (const char *src, size_t *size, unsigned long limit)
+
+  Copies the source string of a wide string literal to a dynamically
+  allocated buffer of 32-bit elements. Characters of the source and
+  universal character names are stored as code points. The value of each
+  numeric escape sequence is stored as one element.
+
+  /param src   Buffer containing the source string with escape sequences
+  /param size  Pointer to location where the number of elements, including the terminating zero, is written
+  /param limit Largest value that an element of the literal can have
+  /return Dynamically allocated resulting buffer
+*/
+
+const uint32_t *
+copyStr32 (const char *src, size_t *size, unsigned long limit)
+{
+  struct dbuf_s dbuf;
+  uint32_t element;
+
+  dbuf_init (&dbuf, 128);
+
+  while (*src)
+    {
+      if (*src == '\"')
+        {
+          ++src;
+        }
+      else if (*src == '\\')
+        {
+          ++src;
+          escapeValue escape = parseEscape (&src);
+          unsigned long c = escapeValueInRange (escape, limit);
+
+          if (escape.kind == ESCAPE_UNIVERSAL && c >= 0x110000)
+            werror (W_UNICODE_RANGE);
+          element = c;
+          dbuf_append (&dbuf, &element, sizeof (element));
+        }
+      else
+        {
+          size_t utf_8_len = strcspn (src, "\"\\");
+          size_t utf_32_len;
+          const uint32_t *utf_32 = utf_32_from_utf_8 (&utf_32_len, src, utf_8_len);
+
+          dbuf_append (&dbuf, utf_32, utf_32_len * sizeof (*utf_32));
+          free ((void *)utf_32);
+          src += utf_8_len;
+        }
+    }
+
+  element = 0;
+  dbuf_append (&dbuf, &element, sizeof (element));
+  *size = dbuf_get_length (&dbuf) / sizeof (element);
+
+  return dbuf_detach (&dbuf);
 }
 
 static char prefix[256] = "";
