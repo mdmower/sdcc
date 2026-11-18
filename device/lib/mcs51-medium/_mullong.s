@@ -70,7 +70,7 @@ __mullong:
 
 .ifdef __SDCC_USE_XSTACK
 	mov	a,#-4		;  1  b 4 bytes
-	add	a,_spx		;  1
+	add	a,spx		;  1
 	mov	r0,a		;  1  r0 points to b0
 .else
 ;if defined (__SDCC_MODEL_MEDIUM)

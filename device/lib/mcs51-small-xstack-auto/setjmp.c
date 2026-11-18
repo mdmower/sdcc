@@ -62,7 +62,7 @@ ___setjmp:
 ;../../device/lib/_setjmp.c:184:*buf++ = spx;
 ;     genPointerSet
 ;     genGenPointerSet
-	mov	a,_spx
+	mov	a,spx
 	lcall	__gptrput
 	inc	dptr
 ;../../device/lib/_setjmp.c:185:*buf++ = bp;
@@ -133,7 +133,7 @@ ___setjmp:
 	.globl _longjmp
 _longjmp:
 ;     genReceive
-	mov	r0,_spx
+	mov	r0,spx
 	dec	r0
 	movx	a,@r0
 	mov	r2,a
@@ -150,7 +150,7 @@ _longjmp:
 ;     genPointerGet
 ;     genGenPointerGet
 	lcall	__gptrget
-	mov	_spx,a
+	mov	spx,a
 	inc	dptr
 ;../../device/lib/_setjmp.c:195:bp = *buf++;
 ;     genPointerGet

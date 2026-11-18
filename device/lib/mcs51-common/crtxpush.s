@@ -40,8 +40,8 @@ bits:
 sdcc_xpush_regs::
 	push	acc		;save mask in high nibble of acc
 	anl	a,#0x0F		;take size from low nibble of acc
-	add	a,_spx
-	mov	_spx,a		;allocate space
+	add	a,spx
+	mov	spx,a		;allocate space
 	xch	a,r0
 	push	acc		;save R0 for return
 	jbc	B.0,00100$	;if B(0)=0 then

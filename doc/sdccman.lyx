@@ -45848,7 +45848,7 @@ mov __XPAGE,#(__start__xstack >> 8)
 \begin_inset space ~
 \end_inset
 
-mov _spx,#__start__xstack
+mov spx,#__start__xstack
 \end_layout
 
 \begin_layout Verse
@@ -47673,7 +47673,7 @@ djnz r1,00007$
 \end_inset
 
 ;
- and __mcs51_genRAMCLEAR modifies _spx.
+ and __mcs51_genRAMCLEAR modifies spx.
 \begin_inset Newline newline
 \end_inset
 
@@ -47745,7 +47745,7 @@ mov __XPAGE,#(__start__xstack >> 8)
 \begin_inset space ~
 \end_inset
 
-mov _spx,#__start__xstack
+mov spx,#__start__xstack
 \end_layout
 
 \begin_layout Verse

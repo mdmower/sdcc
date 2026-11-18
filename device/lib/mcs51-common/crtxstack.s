@@ -47,12 +47,12 @@ __sdcc_init_xstack::
 ; uses the xstack.
 	
 	mov	__XPAGE,#(__start__xstack >> 8)
-	mov	_spx,#__start__xstack
+	mov	spx,#__start__xstack
 
 	.area GSINIT5 (CODE)
 
 ; Need to initialize in GSINIT5 because __mcs51_genXINIT modifies __XPAGE
-; and __mcs51_genRAMCLEAR modifies _spx.
+; and __mcs51_genRAMCLEAR modifies spx.
 	
 	mov	__XPAGE,#(__start__xstack >> 8)
-	mov	_spx,#__start__xstack
+	mov	spx,#__start__xstack

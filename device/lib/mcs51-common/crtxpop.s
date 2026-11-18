@@ -40,7 +40,7 @@ bits:
 sdcc_xpop_regs::
 	push	acc		;save mask in high nibble of acc
 	mov	a,r0
-	mov	r0,_spx
+	mov	r0,spx
 	jbc	B.0,00100$	;if B(0)=0 then
 	dec	r0
 	movx	a,@r0		;pop R0
@@ -99,7 +99,7 @@ sdcc_xpop_regs::
 	movx	a,@r0		;pop dph
 	mov	dph,a
 00110$:
-	mov	_spx,r0
+	mov	spx,r0
 	pop	acc
 	mov	r0,a
 	ret
