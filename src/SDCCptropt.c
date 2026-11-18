@@ -264,6 +264,29 @@ ptrBaseRematSym (symbol * ptrsym)
     return NULL;
 }
 
+/*--------------------------------------------------------------------*/
+/* declaredVolatile - true if the type is volatile, or if it has a    */
+/*   member or an element that is declared volatile                   */
+/*--------------------------------------------------------------------*/
+static bool
+declaredVolatile (sym_link * type)
+{
+  symbol *field;
+
+  if (IS_VOLATILE (type))
+    return true;
+
+  while (IS_ARRAY (type))
+    type = type->next;
+
+  if (IS_STRUCT (type))
+    for (field = SPEC_STRUCT (type)->fields; field; field = field->next)
+      if (declaredVolatile (field->type))
+        return true;
+
+  return false;
+}
+
 
 /*--------------------------------------------------------------------*/
 /* ptrPseudoSymSafe - check to see if the conversion of the result of */
@@ -318,6 +341,13 @@ ptrPseudoSymSafe (symbol * sym, iCode * dic)
   if (IS_CAST_ICODE (ric))
     return 0;
   basesym = OP_SYMBOL (IC_LEFT (ric));
+
+  /* Can't if the object is volatile. The pointerGet reads it once, */
+  /* and it is read again for each use of a pseudo symbol. The type */
+  /* of the base symbol is tested too, because geniCodeStruct gives */
+  /* the members of unions a volatile type.                         */
+  if (IS_VOLATILE (operandType (IC_LEFT (dic))->next) && declaredVolatile (basesym->type))
+    return 0;
 
   //isGlobal = !basesym->islocal && !basesym->ismyparm;
   ptrsymDclType = aggrToPtrDclType (ptrsym->type, false);
