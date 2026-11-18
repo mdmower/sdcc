@@ -82,7 +82,9 @@ typedef struct ast
     /* if switch then switch values */
     struct
     {
-      value *swVals;            /* switch comparison values */
+      value *swVals;            /* switch comparison values; a case range */
+                                /* is its first value and its last, which */
+                                /* has caseRangeEnd set                   */
       int swDefault;            /* default if present       */
       int swNum;                /* switch number            */
       char *swSuffix;

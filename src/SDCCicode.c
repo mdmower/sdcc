@@ -4285,7 +4285,7 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
   int i, t;
   value *vch, *maxVal;
   iCode *ic;
-  symbol *falseLabel;
+  symbol *falseLabel, *caseLabel;
   set *labels = NULL;
   sym_link *cetype = getSpec (operandType (cond));
   int sizeofMinCost, sizeofZeroMinCost, sizeofMaxCost;
@@ -4302,6 +4302,8 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
   /* If not all integer numbers are present the algorithm */
   /* inserts jumps to the default label for the missing numbers */
   /* and decides later whether it is worth it */
+  /* A case range has two values in the list, so that it counts */
+  /* as the two comparisons that it takes without a jump table. */
   min = (int) ulFromVal (vch = caseVals);
 
   while (vch->next)
@@ -4372,8 +4374,17 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
 
   // The match & jump sequence results in the instruction sequence being executed depending far more on the condition value,
   // and thus introduces worse timing and energy side channels, and they get worse the more cases there are.
-  if (cnt > 2 && optimize.nosidechannels)
-    sizeofMatchJump = INT_MAX;
+  // For this, each value of a case range counts as a case.
+  if (optimize.nosidechannels)
+    {
+      int values = cnt;
+
+      for (vch = caseVals; vch->next; vch = vch->next)
+        if (vch->next->caseRangeEnd)
+          values += (int) ulFromVal (vch->next) - (int) ulFromVal (vch) - 1;
+      if (values > 2)
+        sizeofMatchJump = INT_MAX;
+    }
 
   /* If the size cost of the jump table is uneconomical then exit */
   if (sizeofMatchJump < sizeofJumpTable)
@@ -4407,9 +4418,17 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
           /* Explicit case: make a new label for it. */
           dbuf_printf (&dbuf, "_case_%d_%d%s", tree->values.switchVals.swNum, i,
                        tree->values.switchVals.swSuffix ? tree->values.switchVals.swSuffix : "");
-          addSet (&labels, newiTempLabel (dbuf_c_str (&dbuf)));
+          caseLabel = newiTempLabel (dbuf_c_str (&dbuf));
+          addSet (&labels, caseLabel);
           dbuf_destroy (&dbuf);
           vch = vch->next;
+          /* A case range: the same label for its other values. */
+          if (vch && vch->caseRangeEnd)
+            {
+              for (t = (int) ulFromVal (vch); i < t; i++)
+                addSet (&labels, caseLabel);
+              vch = vch->next;
+            }
           if (vch)
             t = (int) ulFromVal (vch);
         }
@@ -4464,6 +4483,40 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
 }
 
 /*-----------------------------------------------------------------*/
+/* geniCodeCaseRange - jumps to the label of a case range if the   */
+/*                     switch condition has one of its values      */
+/*-----------------------------------------------------------------*/
+static void
+geniCodeCaseRange (operand * cond, value * low, value * high, symbol * caseLabel, bool noneBelow)
+{
+  iCode *ic;
+  sym_link *ctype = operandType (cond);
+  symbol *nextLabel = newiTempLabel (NULL);
+
+  /* There is nothing to compare with the first value if the condition */
+  /* cannot be below it here, and nothing to compare with a last value */
+  /* that is the highest of the type of the condition. A value that    */
+  /* the type cannot have is compared, because a case with such a      */
+  /* value has a warning.                                              */
+  if (!noneBelow || checkConstantRange (ctype, low->etype, EQ_OP, false) == CCR_ALWAYS_FALSE)
+    {
+      ic = newiCodeCondition (geniCodeLogic (cond, operandFromValue (low, true), '<', NULL), nextLabel, NULL);
+      ADDTOCHAIN (ic);
+    }
+
+  if (checkConstantRange (ctype, high->etype, '>', false) != CCR_ALWAYS_FALSE ||
+      checkConstantRange (ctype, high->etype, EQ_OP, false) == CCR_ALWAYS_FALSE)
+    {
+      ic = newiCodeCondition (geniCodeLogic (cond, operandFromValue (high, true), '>', NULL), NULL, caseLabel);
+      ADDTOCHAIN (ic);
+    }
+  else
+    geniCodeGoto (caseLabel);
+
+  geniCodeLabel (nextLabel);
+}
+
+/*-----------------------------------------------------------------*/
 /* geniCodeSwitch - changes a switch to a if statement             */
 /*-----------------------------------------------------------------*/
 void
@@ -4474,18 +4527,25 @@ geniCodeSwitch (ast * tree, int lvl)
   value *caseVals = tree->values.switchVals.swVals;
   symbol *trueLabel, *falseLabel;
   struct dbuf_s dbuf;
+  bool noneBelow = false;
 
   /* If the condition is a literal, then just jump to the */
   /* appropriate case label. */
   if (IS_LITERAL (getSpec (operandType (cond))))
     {
-      int switchVal, caseVal;
+      int switchVal, caseVal, caseValHigh;
 
       switchVal = (int) ulFromVal (OP_VALUE (cond));
       while (caseVals)
         {
-          caseVal = (int) ulFromVal (caseVals);
-          if (caseVal == switchVal)
+          caseVal = caseValHigh = (int) ulFromVal (caseVals);
+          /* a case range has the label of its first value */
+          if (caseVals->next && caseVals->next->caseRangeEnd)
+            {
+              caseVals = caseVals->next;
+              caseValHigh = (int) ulFromVal (caseVals);
+            }
+          if (caseVal <= switchVal && switchVal <= caseValHigh)
             {
               struct dbuf_s dbuf;
 
@@ -4525,16 +4585,34 @@ geniCodeSwitch (ast * tree, int lvl)
   /* for the cases defined do */
   while (caseVals)
     {
-      operand *compare = geniCodeLogic (cond, operandFromValue (caseVals, true), EQ_OP, NULL);
-
       dbuf_init (&dbuf, 128);
       dbuf_printf (&dbuf, "_case_%d_%d%s", tree->values.switchVals.swNum, (int) ulFromVal (caseVals),
                    tree->values.switchVals.swSuffix ? tree->values.switchVals.swSuffix : "");
       trueLabel = newiTempLabel (dbuf_c_str (&dbuf));
       dbuf_destroy (&dbuf);
 
-      ic = newiCodeCondition (compare, trueLabel, NULL);
-      ADDTOCHAIN (ic);
+      /* The condition cannot be below this case here if the case has */
+      /* the lowest value of the type, or if the cases before it have */
+      /* all the values below it.                                     */
+      if (checkConstantRange (operandType (cond), caseVals->etype, '<', false) == CCR_ALWAYS_FALSE)
+        noneBelow = true;
+
+      /* a case range takes two comparisons, however many values it has */
+      if (caseVals->next && caseVals->next->caseRangeEnd)
+        {
+          geniCodeCaseRange (cond, caseVals, caseVals->next, trueLabel, noneBelow);
+          caseVals = caseVals->next;
+        }
+      else
+        {
+          operand *compare = geniCodeLogic (cond, operandFromValue (caseVals, true), EQ_OP, NULL);
+
+          ic = newiCodeCondition (compare, trueLabel, NULL);
+          ADDTOCHAIN (ic);
+        }
+
+      if (caseVals->next && (int) ulFromVal (caseVals->next) != (int) ulFromVal (caseVals) + 1)
+        noneBelow = false;
       caseVals = caseVals->next;
     }
 

@@ -2155,6 +2155,7 @@ copyValue (value * src)
   strncpyz (dest->name, src->name, SDCC_NAME_MAX);
   dest->type = (src->type ? copyLinkChain (src->type) : NULL);
   dest->etype = (src->type ? getSpec (dest->type) : NULL);
+  dest->caseRangeEnd = src->caseRangeEnd;
 
   return dest;
 }

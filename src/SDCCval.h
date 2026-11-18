@@ -35,6 +35,8 @@ typedef struct value
   symbol *sym;                  /* Original Symbol                  */
   struct value *next;           /* used in initializer list         */
   unsigned vArgs:1;             /* arg list ended with variable arg */
+  unsigned caseRangeEnd:1;      /* last value of a case range; its  */
+                                /* first value is the one before    */
 }
 value;
 

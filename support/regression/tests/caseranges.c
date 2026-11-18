@@ -45,6 +45,35 @@ testCaseRanges (void)
     }
   }
 }
+
+// A case range that labels a statement which is not in a statement list
+void
+testCaseRangeStatement (void)
+{
+  for (int n = 0; n <= 7; n++)
+  {
+    int r = 0;
+
+    switch (n)
+      case 2 ... 4:
+        r = 1;
+    ASSERT (r == (n >= 2 && n <= 4));
+
+    r = 0;
+    switch (n)
+    {
+      case 0:
+        r = 2;
+        if (r)
+      case 5 ... 6:
+          r++;
+        break;
+      default:
+        r = 9;
+    }
+    ASSERT (r == (n == 0 ? 3 : n == 5 || n == 6 ? 1 : 9));
+  }
+}
 #endif
 
 #ifdef __SDCC

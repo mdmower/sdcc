@@ -7381,7 +7381,9 @@ createCase (ast * swStat, ast * caseVal, ast * stmnt)
         {
           pval->next = caseVal->opval.val;
         }
-      else if ((int) ulFromVal (val) == cVal)
+      /* the same value, or the end of a case */
+      /* range that has the current value     */
+      else if ((int) ulFromVal (val) == cVal || val->caseRangeEnd)
         {
           werrorfl (caseVal->filename, caseVal->lineno, E_DUPLICATE_LABEL, "case");
           return NULL;
@@ -7419,8 +7421,8 @@ createCase (ast * swStat, ast * caseVal, ast * stmnt)
 ast *
 createCaseRange (ast * swStat, ast * caseValLow, ast * caseValHigh, ast * stmnt)
 {
-  int cVal;
-  ast *rexpr = stmnt;
+  value *lowVal, *highVal;
+  ast *rexpr;
 
   caseValLow = decorateType (resolveSymbols (caseValLow), RESULT_TYPE_NONE, true);
   caseValHigh = decorateType (resolveSymbols (caseValHigh), RESULT_TYPE_NONE, true);
@@ -7456,12 +7458,24 @@ createCaseRange (ast * swStat, ast * caseValLow, ast * caseValHigh, ast * stmnt)
       return NULL;
     }
 
-  for (cVal = cValLow; cVal <= cValHigh; cVal++)
+  /* the range is a case for its first value, which has the */
+  /* label, and its last value follows in the switch values */
+  lowVal = valueFromLit (cValLow);
+  rexpr = createCase (swStat, newAst_VALUE (lowVal), stmnt);
+  if (!rexpr || cValLow == cValHigh)
+    return rexpr;
+
+  /* no other case may have a value of the range */
+  if (lowVal->next && (int) ulFromVal (lowVal->next) <= cValHigh)
     {
-      rexpr = createCase (swStat, newAst_VALUE (valueFromLit (cVal)), rexpr);
-      if (!rexpr)
-        return NULL;
+      werrorfl (caseValHigh->filename, caseValHigh->lineno, E_DUPLICATE_LABEL, "case");
+      return NULL;
     }
+
+  highVal = valueFromLit (cValHigh);
+  highVal->caseRangeEnd = 1;
+  highVal->next = lowVal->next;
+  lowVal->next = highVal;
 
   return rexpr;
 }
@@ -9429,11 +9443,18 @@ ast_print (ast * tree, FILE * outfile, int indent)
         ast_print (tree->left, outfile, 0);
         for (val = tree->values.switchVals.swVals; val; val = val->next)
           {
+            int caseVal = (int) ulFromVal (val);
+
             INDENT (indent + 2, outfile);
-            fprintf (outfile, "CASE 0x%x GOTO _case_%d_%d%s\n",
-                     (int) ulFromVal (val),
+            fprintf (outfile, "CASE 0x%x ", caseVal);
+            if (val->next && val->next->caseRangeEnd)
+              {
+                val = val->next;
+                fprintf (outfile, "... 0x%x ", (int) ulFromVal (val));
+              }
+            fprintf (outfile, "GOTO _case_%d_%d%s\n",
                      tree->values.switchVals.swNum,
-                     (int) ulFromVal (val), tree->values.switchVals.swSuffix ? tree->values.switchVals.swSuffix : "");
+                     caseVal, tree->values.switchVals.swSuffix ? tree->values.switchVals.swSuffix : "");
           }
         ast_print (tree->right, outfile, indent);
       }
