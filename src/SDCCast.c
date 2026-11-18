@@ -1029,6 +1029,11 @@ processParms (ast * func, value * defParm, ast ** actParm, int *parmNumber,     
   resultType = defParm ? getResultTypeFromType (defParm->type) : RESULT_TYPE_NONE;
   *actParm = decorateType (*actParm, resultType, true);
 
+  /* decorateType() reported the error of this parameter. The cast below
+     is made from a copy of the tree, and copyAst() does not copy isError. */
+  if ((*actParm)->isError)
+    return 1;
+
   if (IS_VOID ((*actParm)->ftype))
     {
       werror (E_VOID_VALUE_USED);
