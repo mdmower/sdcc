@@ -1856,7 +1856,12 @@ parameter_declaration
           symbol *loop;
 
           if (IS_SPEC ($1) && !IS_VALID_PARAMETER_STORAGE_CLASS_SPEC ($1))
-            werror (E_STORAGE_CLASS_FOR_PARAMETER, $2->name);
+            {
+              werror (E_STORAGE_CLASS_FOR_PARAMETER, $2->name);
+              /* The compiler reads the values of constexpr objects from their
+                 initializers, and parameters do not have initializers. */
+              SPEC_CONSTEXPR ($1) = 0;
+            }
           pointerTypes ($2->type, $1);
           if (IS_SPEC ($2->etype))
             SPEC_NEEDSPAR($2->etype) = 0;
@@ -1876,6 +1881,7 @@ parameter_declaration
           if (IS_SPEC ($1) && !IS_VALID_PARAMETER_STORAGE_CLASS_SPEC ($1))
             {
               werror (E_STORAGE_CLASS_FOR_PARAMETER, "type name");
+              SPEC_CONSTEXPR ($1) = 0;
             }
           pointerTypes ($2,$1);
           for (p = $2; p && p->next; p = p->next)
@@ -1901,7 +1907,10 @@ parameter_declaration
             SPEC_CONST ($1) || SPEC_RESTRICT ($1) || SPEC_VOLATILE ($1) || SPEC_ATOMIC ($1))) // No qualifier allowed with void
             werror (E_VOID_SHALL_BE_LONELY);
           else if (IS_SPEC ($1) && !IS_VALID_PARAMETER_STORAGE_CLASS_SPEC ($1))
-            werror (E_STORAGE_CLASS_FOR_PARAMETER, "type name");
+            {
+              werror (E_STORAGE_CLASS_FOR_PARAMETER, "type name");
+              SPEC_CONSTEXPR ($1) = 0;
+            }
 
           $$ = newValue ();
           $$->type = $1;
