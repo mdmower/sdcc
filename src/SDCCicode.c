@@ -48,6 +48,7 @@ int inlinedActive = 0;
 symbol *returnLabel;            /* function return label */
 symbol *entryLabel;             /* function entry  label */
 static symbol *structReturnSym; /* function's temporary object for struct returns */
+static const ast *unusedValue;  /* tree whose value is not used */
 
 /*-----------------------------------------------------------------*/
 /* forward definition of some functions */
@@ -4744,10 +4745,12 @@ ast2iCode (ast * tree, int lvl)
       int oldInlinedActive = inlinedActive;
       if (tree->inlined)
         inlinedActive = 1;
+      unusedValue = tree->left;
       if (tree->left && tree->left->type == EX_VALUE)
         geniCodeDummyRead (ast2iCode (tree->left, lvl + 1));
       else
         ast2iCode (tree->left, lvl + 1);
+      unusedValue = tree->right;
       if (tree->right && tree->right->type == EX_VALUE)
         geniCodeDummyRead (ast2iCode (tree->right, lvl + 1));
       else
@@ -5043,6 +5046,34 @@ ast2iCode (ast * tree, int lvl)
                 return geniCodeCast (type, right, true);
               }
           }
+
+        /* geniCodeAssign() returns the right operand as the value of
+           the assignment, and each use of that value would read a
+           volatile right operand again. The value is therefore a copy
+           that precedes the assignment. The copy is not made for an
+           assignment that is a statement, because its value is not
+           used. */
+        if (tree != unusedValue && !IS_BITVAR (tree->ftype) && isOperandVolatile (right, false))
+          {
+            iCode *ic = newiCode ('=', NULL, right);
+            sym_link *type;
+
+            IC_RESULT (ic) = right = newiTempOperand (operandType (right), 0);
+            ADDTOCHAIN (ic);
+
+            /* iTemps are not volatile, see checkTypes() */
+            type = operandType (right);
+            if (IS_DECL (type))
+              {
+                DCL_PTR_VOLATILE (type) = 0;
+                DCL_PTR_ATOMIC (type) = 0;
+              }
+            else
+              {
+                SPEC_VOLATILE (type) = 0;
+                SPEC_ATOMIC (type) = 0;
+              }
+          }
         return geniCodeAssign (left, right, 0, 1);
       }
     case MUL_ASSIGN:
@@ -5134,7 +5165,10 @@ ast2iCode (ast * tree, int lvl)
           return NULL;
         }
       else
-        return ast2iCode (tree->right, lvl + 1);
+        {
+          unusedValue = tree->right;
+          return ast2iCode (tree->right, lvl + 1);
+        }
 
     case GOTO:
       geniCodeGoto (OP_SYMBOL (ast2iCode (tree->left, lvl + 1)));
