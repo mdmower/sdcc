@@ -1,0 +1,148 @@
+/** cast-volatile.c
+    Conversions of volatile signed objects to wider types read each byte
+    of the object once.
+
+    mem: __data, __idata, __pdata, __xdata
+ */
+
+#include <testfwk.h>
+
+#include <stdint.h>
+
+#ifdef __SDCC_mcs51
+#include <8052.h>
+#endif
+
+volatile {mem} int8_t v8;
+volatile {mem} int16_t v16;
+
+int16_t i;
+int32_t l;
+
+void
+testValue (void)
+{
+  v8 = -1;
+  i = v8;
+  ASSERT (i == -1);
+  v8 = 127;
+  i = v8;
+  ASSERT (i == 127);
+
+  v8 = -128;
+  l = v8;
+  ASSERT (l == -128);
+  v8 = 1;
+  l = v8;
+  ASSERT (l == 1);
+
+  v16 = -2;
+  l = v16;
+  ASSERT (l == -2);
+  v16 = 0x7f80;
+  l = v16;
+  ASSERT (l == 0x7f80);
+
+  i = 1000;
+  v8 = -100;
+  i += v8;
+  ASSERT (i == 900);
+}
+
+#ifdef __SDCC_mcs51
+/* The program requests the interrupt of timer 2 and leaves the request
+   set, so the service routine runs after each instruction of the program
+   while the interrupt is enabled. After the program writes n to delay,
+   the n-th run of the routine changes the sign of v8 and of v16. The two
+   values of v16 have the same lower byte, because the program reads the
+   two bytes with two instructions. */
+volatile uint8_t delay;
+
+void
+T2_isr (void) __interrupt (5)
+{
+  if (delay && !--delay)
+    {
+      v8 = 0;
+      v16 = 0x0055;
+    }
+}
+
+/* Executes statement, and the objects change after the n-th instruction
+   that follows the write to delay. */
+#define CHANGE_AFTER(n, statement) \
+  do \
+    { \
+      delay = 0; \
+      v8 = -1; \
+      v16 = -171; /* 0xff55 */ \
+      EA = 1; \
+      delay = (n); \
+      statement; \
+      EA = 0; \
+    } \
+  while (0)
+
+/* Each conversion reads the object in fewer instructions. */
+#define INSTRUCTIONS 16
+
+/* bits of seen */
+#define BEFORE 1 /* the conversion read the object before the change */
+#define AFTER 2  /* the conversion read the object after the change */
+#endif
+
+/* Conversions that read the upper byte of the object once for the value
+   and once more for the sign give 255 or 65365 when the object changes
+   between the two reads. In each loop, the object changes before the
+   read for n = 1 and after the read for n = INSTRUCTIONS, which seen
+   records. */
+void
+testReadOnce (void)
+{
+#ifdef __SDCC_mcs51
+  uint8_t n, seen;
+
+  ET2 = 1;
+  TF2 = 1;
+
+  seen = 0;
+  for (n = 1; n <= INSTRUCTIONS; n++)
+    {
+      CHANGE_AFTER (n, i = v8);
+      ASSERT (i == -1 || i == 0);
+      seen |= i ? BEFORE : AFTER;
+    }
+  ASSERT (seen == (BEFORE | AFTER));
+
+  seen = 0;
+  for (n = 1; n <= INSTRUCTIONS; n++)
+    {
+      CHANGE_AFTER (n, l = v8);
+      ASSERT (l == -1 || l == 0);
+      seen |= l ? BEFORE : AFTER;
+    }
+  ASSERT (seen == (BEFORE | AFTER));
+
+  seen = 0;
+  for (n = 1; n <= INSTRUCTIONS; n++)
+    {
+      CHANGE_AFTER (n, l = v16);
+      ASSERT (l == -171 || l == 0x0055);
+      seen |= l < 0 ? BEFORE : AFTER;
+    }
+  ASSERT (seen == (BEFORE | AFTER));
+
+  seen = 0;
+  for (n = 1; n <= INSTRUCTIONS; n++)
+    {
+      i = 0;
+      CHANGE_AFTER (n, i += v8);
+      ASSERT (i == -1 || i == 0);
+      seen |= i ? BEFORE : AFTER;
+    }
+  ASSERT (seen == (BEFORE | AFTER));
+
+  ET2 = 0;
+  TF2 = 0;
+#endif
+}

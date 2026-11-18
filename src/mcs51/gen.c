@@ -13037,6 +13037,7 @@ genCast (iCode * ic)
   operand *right = IC_RIGHT (ic);
   int size, offset;
   bool right_boolean;
+  bool msb_in_acc;
 
   D (emitcode (";", "genCast"));
 
@@ -13204,12 +13205,25 @@ genCast (iCode * ic)
 
   /* so we now know that the size of destination is greater
      than the size of the source */
+  /* The bytes of a volatile source are read once. Its most significant
+     byte is copied through the accumulator, and the sign is extended
+     from the accumulator. */
+  msb_in_acc = AOP (right)->aop_is_volatile && IS_SPEC (rtype) && !SPEC_USIGN (rtype) && AOP_TYPE (right) != AOP_CRY;
+
   /* we move to result for the size of source */
   size = AOP_SIZE (right);
   offset = 0;
   while (size--)
     {
-      opPut(result, opGet (right, offset, FALSE, FALSE), offset);
+      if (!size && msb_in_acc)
+        {
+          MOVA (opGet (right, offset, FALSE, FALSE));
+          opPut(result, "a", offset);
+        }
+      else
+        {
+          opPut(result, opGet (right, offset, FALSE, FALSE), offset);
+        }
       offset++;
     }
 
@@ -13236,7 +13250,8 @@ genCast (iCode * ic)
       bool masktopbyte = IS_BITINT (ctype) && (SPEC_BITINTWIDTH (ctype) % 8) && SPEC_USIGN (ctype);
 
       /* we need to extend the sign :{ */
-      MOVA (opGet (right, AOP_SIZE (right) - 1, FALSE, FALSE));
+      if (!msb_in_acc)
+        MOVA (opGet (right, AOP_SIZE (right) - 1, FALSE, FALSE));
       emitcode ("rlc", "a");
       emitcode ("subb", "a,acc");
       while (size--)
